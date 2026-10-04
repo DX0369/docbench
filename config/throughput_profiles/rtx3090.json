@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "hardware": "RTX 3090 24 GiB (single GPU)",
+  "methods": {
+    "unlimited_ocr_sglang": {
+      "unlimited_ocr_sglang_service": {
+        "pressure": 4,
+        "runtime_options": {
+          "unlimited_ocr_sglang_env": "gdb_unlimited_ocr_sglang",
+          "unlimited_ocr_cuda_home": "/data/wangsq/software/cuda-envs/cuda-12.8",
+          "unlimited_ocr_flashinfer_workspace": "/data/wangsq/code/global_doc_bench/.cache/unlimited_ocr_sglang",
+          "unlimited_ocr_mem_fraction_static": 0.9,
+          "unlimited_ocr_context_length": 32768,
+          "unlimited_ocr_request_timeout_seconds": 1200,
+          "unlimited_ocr_request_mode": "joint"
+        }
+      }
+    },
+    "marker": {
+      "marker_shared_workers": {
+        "pressure": 4,
+        "runtime_options": {}
+      }
+    }
+  }
+}

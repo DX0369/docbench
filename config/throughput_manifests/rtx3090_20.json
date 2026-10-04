@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "path_root": "GDB_DATA_ROOT",
+  "subset_mode": "stratified-only",
+  "pressure_pdf_list_file": null,
+  "pressure_sample_count": null,
+  "pressure_sample_seed": 20260812,
+  "seed": 20260812,
+  "bucket_thresholds": {
+    "short_max_pages": 2,
+    "medium_max_pages": 8
+  },
+  "requested_counts": {
+    "short": 6,
+    "medium": 8,
+    "long": 6
+  },
+  "available_counts": {
+    "short": 33,
+    "medium": 67,
+    "long": 63
+  },
+  "selected_count": 20,
+  "stratified_selected_count": 20,
+  "pressure_available_count": 0,
+  "pressure_selected_count": 0,
+  "selected": [
+    {
+      "pdf_path": "pdf_tree/exam/en/exam_en_TX_2025-staar-math-3-rationale_10_24/exam_en_TX_2025-staar-math-3-rationale_10_24.pdf",
+      "page_count": 14,
+      "bucket": "long"
+    },
+    {
+      "pdf_path": "pdf_tree/exam/zh/exam_zh_2008______________0_5/exam_zh_2008______________0_5.pdf",
+      "page_count": 5,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/exam/zh/exam_zh_2014______________0_2/exam_zh_2014______________0_2.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/exam/zh/exam_zh_2016________________0_2/exam_zh_2016________________0_2.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/exam/zh/exam_zh_2019______________0_3/exam_zh_2019______________0_3.pdf",
+      "page_count": 3,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/financial_report/en/financial_report_en_bank-of-america-corporation_report_2_205_219/financial_report_en_bank-of-america-corporation_report_2_205_219.pdf",
+      "page_count": 14,
+      "bucket": "long"
+    },
+    {
+      "pdf_path": "pdf_tree/industry_standard/en/industry_standard_en_NIST_SP_800-152_8_33/industry_standard_en_NIST_SP_800-152_8_33.pdf",
+      "page_count": 25,
+      "bucket": "long"
+    },
+    {
+      "pdf_path": "pdf_tree/magazine/en/magazine_en_New_Scientist-2025-11-08_8_12/magazine_en_New_Scientist-2025-11-08_8_12.pdf",
+      "page_count": 4,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/magazine/en/magazine_en_The_New_Yorker-2025-12-15_68_70/magazine_en_The_New_Yorker-2025-12-15_68_70.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/magazine/zh/magazine_zh__Vista____2020__08_______________________39_50/magazine_zh__Vista____2020__08_______________________39_50.pdf",
+      "page_count": 11,
+      "bucket": "long"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh_______________________0_7/paper_zh_______________________0_7.pdf",
+      "page_count": 7,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh_______________________2_4/paper_zh_______________________2_4.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh________________________0_2/paper_zh________________________0_2.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh__________________________0_4/paper_zh__________________________0_4.pdf",
+      "page_count": 4,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh___________________________0_2/paper_zh___________________________0_2.pdf",
+      "page_count": 2,
+      "bucket": "short"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh___________________________2_5/paper_zh___________________________2_5.pdf",
+      "page_count": 3,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/paper/zh/paper_zh________________________________0_4/paper_zh________________________________0_4.pdf",
+      "page_count": 4,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/textbook/zh/textbook_zh__Java______II_________9________Cay_S__Horstmann_Gary_Cornell__543_549/textbook_zh__Java______II_________9________Cay_S__Horstmann_Gary_Cornell__543_549.pdf",
+      "page_count": 6,
+      "bucket": "medium"
+    },
+    {
+      "pdf_path": "pdf_tree/textbook/zh/textbook_zh_____-________2007________-_libgen_li_438_452/textbook_zh_____-________2007________-_libgen_li_438_452.pdf",
+      "page_count": 14,
+      "bucket": "long"
+    },
+    {
+      "pdf_path": "pdf_tree/textbook/zh/textbook_zh_____-___________________2004___________-_libgen_li_22_42/textbook_zh_____-___________________2004___________-_libgen_li_22_42.pdf",
+      "page_count": 20,
+      "bucket": "long"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+diff --git a/post_processing/inference.py b/post_processing/inference.py
+--- a/post_processing/inference.py
++++ b/post_processing/inference.py
+@@ -820,6 +820,7 @@
+                 doc_blocks[mi["table2_idx"]]["cell_list"] = cell_list
+         except Exception as e:
+             print(f"Table merge error: {e}")
++            raise
+ 
+     merge_inputs = filter_table_merge(doc_blocks)
+     if merge_inputs:

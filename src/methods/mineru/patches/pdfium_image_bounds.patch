@@ -1,0 +1,12 @@
+diff --git a/mineru/utils/pdf_classify.py b/mineru/utils/pdf_classify.py
+--- a/mineru/utils/pdf_classify.py
++++ b/mineru/utils/pdf_classify.py
+@@ -388,7 +388,7 @@ def get_high_image_coverage_ratio_pdfium(pdf_doc, page_indices):
+         for page_object in page.get_objects(
+             filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE], max_depth=3
+         ):
+-            left, bottom, right, top = page_object.get_pos()
++            left, bottom, right, top = page_object.get_bounds()
+             image_area += max(0.0, right - left) * max(0.0, top - bottom)
+ 
+         coverage_ratio = min(image_area / page_area, 1.0) if page_area > 0 else 0.0

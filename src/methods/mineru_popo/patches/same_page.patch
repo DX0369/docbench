@@ -1,0 +1,14 @@
+diff --git a/post_processing/inference.py b/post_processing/inference.py
+--- a/post_processing/inference.py
++++ b/post_processing/inference.py
+@@ -515,5 +515,9 @@
+     unique_pages = sorted(set(pages))
+-    
++
++    # GDB: non-empty same-page candidates must still reach model inference.
++    if len(unique_pages) == 1:
++        return [[unique_pages[0], unique_pages[0]]], [sorted_items]
++
+     boundaries = []
+     current_min = unique_pages[0]
+     

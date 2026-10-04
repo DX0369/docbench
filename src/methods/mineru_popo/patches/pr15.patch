@@ -1,0 +1,40 @@
+diff --git a/post_processing/label_normalization.py b/post_processing/label_normalization.py
+--- a/post_processing/label_normalization.py
++++ b/post_processing/label_normalization.py
+@@ -260,10 +260,36 @@ def extract_middle_text(block: dict[str, Any]) -> str:
+     return " ".join(line_texts)
+ 
+ 
++def extract_table_html_from_middle(block: dict[str, Any]) -> str:
++    """提取 middle.json 表格块嵌套在 blocks[].lines[].spans[].html 的表格 HTML。
++
++    MinerU middle.json 的 table para_block 内容在嵌套 ``blocks`` 里
++    （table_caption / table_body 子块），span.type == "table" 携带完整
++    ``<table>...</table>`` HTML；顶层无 content/text/html 字段。
++    """
++    for sub_block in block.get("blocks") or []:
++        if not isinstance(sub_block, dict):
++            continue
++        for line in sub_block.get("lines") or []:
++            if not isinstance(line, dict):
++                continue
++            for span in line.get("spans") or []:
++                if not isinstance(span, dict):
++                    continue
++                if str(span.get("type") or "").strip().lower() == "table":
++                    html = str(span.get("html") or "").strip()
++                    if html:
++                        return html
++    return ""
++
++
+ def extract_block_content(block: dict[str, Any]) -> str:
+     for key in ("content", "text", "html", "words"):
+         if block.get(key):
+             return normalize_text(block.get(key))
++    table_html = extract_table_html_from_middle(block)
++    if table_html:
++        return table_html
+     return extract_middle_text(block)
+ 
+ 

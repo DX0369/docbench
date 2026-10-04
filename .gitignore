@@ -1,0 +1,27 @@
+# Runtime and generated project state
+data/
+external/
+experiments/
+reports/
+scratch/
+
+# Archived papers and migration-only reference material
+docs/paper/
+monkeyocr_sirius_ref/
+rebuttal.md
+scripts/server_setup/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local editor and OS files
+.idea/
+.vscode/
+.DS_Store
+*.swp

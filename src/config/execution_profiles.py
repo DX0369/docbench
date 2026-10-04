@@ -1,0 +1,397 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import argparse
+import json
+from pathlib import Path
+from typing import Literal
+
+from config.throughput_pressure import PressureKind
+
+
+ExecutionClass = Literal[
+    "exclusive_model_service",
+    "colocated_service_pipeline",
+    "integrated_parser_runtime",
+    "replicated_native_workers",
+]
+
+
+@dataclass(frozen=True)
+class ExecutionProfile:
+    profile_id: str
+    method_id: str
+    execution_class: ExecutionClass
+    pressure_kind: PressureKind
+    gpu_components: tuple[str, ...]
+    replicated_components: tuple[str, ...] = ()
+    profile_role: Literal["legacy", "recommended"] = "recommended"
+    parent_profile: str | None = None
+
+
+EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
+    *(
+        ExecutionProfile(f"{method}_vllm_async_multifile", method, "integrated_parser_runtime",
+                         "monkey_region_concurrency", ("MonkeyOCR model stack",))
+        for method in ("monkeyocr_pro_1_2b", "monkeyocr_pro_3b")
+    ),
+    *(
+        ExecutionProfile(profile + "_page_pool", method, "exclusive_model_service",
+                         "hunyuan_page_pool", components, parent_profile=profile)
+        for method, profile, components in (
+            ("hunyuanocr_10", "hunyuanocr_10_vllm_ar", ("HunyuanOCR-1.0",)),
+            ("hunyuanocr_15", "hunyuanocr_15_vllm_ar", ("HunyuanOCR-1.5 AR",)),
+            ("hunyuanocr_15_dflash", "hunyuanocr_15_vllm_dflash",
+             ("HunyuanOCR-1.5 AR target", "HunyuanOCR-1.5 DFlash draft")),
+        )
+    ),
+    *(
+        ExecutionProfile(
+            f"{method}_vllm_{mode}", method, "exclusive_model_service",
+            "qianfan_page_pool" if mode == "page_pool" else "service_concurrency",
+            ("Qianfan-OCR",),
+        )
+        for method in ("qianfan_ocr", "qianfan_ocr_think")
+        for mode in ("joint", "page_pool")
+    ),
+    ExecutionProfile(
+        "mineru_344_2605_popo_vllm_services", "mineru_344_2605_popo",
+        "colocated_service_pipeline", "service_concurrency",
+        ("MinerU /tasks async hybrid service", "Popo vLLM service"),
+        replicated_components=("CPU document API clients (no model replicas)",),
+    ),
+    ExecutionProfile(
+        "hunyuanocr_10_vllm_ar",
+        "hunyuanocr_10",
+        "exclusive_model_service",
+        "service_concurrency",
+        ("HunyuanOCR-1.0",),
+        profile_role="legacy",
+    ),
+    ExecutionProfile(
+        "hunyuanocr_15_vllm_ar",
+        "hunyuanocr_15",
+        "exclusive_model_service",
+        "service_concurrency",
+        ("HunyuanOCR-1.5 AR",),
+        profile_role="legacy",
+    ),
+    ExecutionProfile(
+        "hunyuanocr_15_vllm_dflash",
+        "hunyuanocr_15_dflash",
+        "exclusive_model_service",
+        "service_concurrency",
+        ("HunyuanOCR-1.5 AR target", "HunyuanOCR-1.5 DFlash draft"),
+        profile_role="legacy",
+    ),
+    ExecutionProfile(
+        "deepseek_ocr2_page_pool",
+        "deepseek_ocr2",
+        "exclusive_model_service",
+        "deepseek_page_pool",
+        ("DeepSeek-OCR-2",),
+        profile_role="recommended",
+    ),
+    ExecutionProfile(
+        "paddleocr_vl_15_multi_pdf_queue",
+        "paddleocr_vl_15",
+        "colocated_service_pipeline",
+        "paddle_internal_workers",
+        ("PaddleOCR-VL-1.5", "PP-DocLayoutV3"),
+        ("PP-DocLayoutV3",),
+        profile_role="recommended",
+    ),
+    ExecutionProfile(
+        "paddleocr_vl_16_multi_pdf_queue",
+        "paddleocr_vl_16",
+        "colocated_service_pipeline",
+        "paddle_internal_workers",
+        ("PaddleOCR-VL-1.6", "PP-DocLayoutV3"),
+        ("PP-DocLayoutV3",),
+        profile_role="recommended",
+    ),
+    ExecutionProfile(
+        "glmocr_multi_pdf_regions",
+        "glmocr",
+        "colocated_service_pipeline",
+        "glm_internal_workers",
+        ("GLM-OCR", "PP-DocLayoutV3"),
+        ("PP-DocLayoutV3",),
+        profile_role="recommended",
+    ),
+    ExecutionProfile(
+        "mineru_303_2509_api",
+        "mineru_303_2509",
+        "integrated_parser_runtime",
+        "mineru_api_tasks",
+        ("MinerU 3.0.3 parser runtime",),
+    ),
+    ExecutionProfile(
+        "mineru_344_2605_api",
+        "mineru_344_2605",
+        "integrated_parser_runtime",
+        "mineru_api_tasks",
+        ("MinerU 3.4.x parser runtime",),
+    ),
+    ExecutionProfile(
+        "youtu_native",
+        "youtu",
+        "integrated_parser_runtime",
+        "youtu_query_batch",
+        ("One resident Youtu HF parser; text-region query grouping",),
+        profile_role="recommended",
+    ),
+    ExecutionProfile(
+        "pp_structurev3_page_prefetch",
+        "pp_structurev3",
+        "integrated_parser_runtime",
+        "pp_page_batch",
+        ("One PP-StructureV3 model stack; bounded CPU prefetch feeding native page batches",),
+    ),
+    ExecutionProfile(
+        "marker_shared_workers",
+        "marker",
+        "integrated_parser_runtime",
+        "marker_shared_workers",
+        ("Marker shared model stack",),
+        ("Per-process inference caches and intermediate tensors",),
+    ),
+    *(ExecutionProfile(profile, "unlimited_ocr_sglang", "exclusive_model_service", kind,
+                       ("Unlimited-OCR SGLang service",))
+      for profile, kind in (("unlimited_ocr_sglang_service", "service_concurrency"),
+                            ("unlimited_ocr_sglang_page_pool", "unlimited_page_pool"))),
+)
+
+
+EXECUTION_PROFILE_BY_ID = {
+    profile.profile_id: profile for profile in EXECUTION_PROFILES
+}
+
+DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
+    "mineru_344_2605_popo": "mineru_344_2605_popo_vllm_services",
+    "deepseek_ocr2": "deepseek_ocr2_page_pool",
+    "glmocr": "glmocr_multi_pdf_regions",
+    "hunyuanocr_10": "hunyuanocr_10_vllm_ar_page_pool",
+    "hunyuanocr_15": "hunyuanocr_15_vllm_ar_page_pool",
+    "hunyuanocr_15_dflash": "hunyuanocr_15_vllm_dflash_page_pool",
+    "marker": "marker_shared_workers",
+    "unlimited_ocr_sglang": "unlimited_ocr_sglang_service",
+    "mineru_303_2509": "mineru_303_2509_api",
+    "mineru_344_2605": "mineru_344_2605_api",
+    "monkeyocr_pro_3b": "monkeyocr_pro_3b_vllm_async_multifile",
+    "monkeyocr_pro_1_2b": "monkeyocr_pro_1_2b_vllm_async_multifile",
+    "paddleocr_vl_15": "paddleocr_vl_15_multi_pdf_queue",
+    "paddleocr_vl_16": "paddleocr_vl_16_multi_pdf_queue",
+    "pp_structurev3": "pp_structurev3_page_prefetch",
+    "qianfan_ocr": "qianfan_ocr_vllm_joint",
+    "qianfan_ocr_think": "qianfan_ocr_think_vllm_joint",
+    "youtu": "youtu_native",
+}
+
+
+def profiles_for_method(method_id: str) -> tuple[ExecutionProfile, ...]:
+    return tuple(
+        profile for profile in EXECUTION_PROFILES if profile.method_id == method_id
+    )
+
+
+def resolve_execution_profile(
+    method_id: str,
+    *,
+    execution_mode: str | None = None,
+    qianfan_request_mode: str = "joint",
+    unlimited_request_mode: str = "joint",
+) -> ExecutionProfile:
+    if method_id == "unlimited_ocr_sglang":
+        if unlimited_request_mode not in ("joint", "page_pool"):
+            raise ValueError("Unlimited request mode must be joint or page_pool")
+        profile_id = ("unlimited_ocr_sglang_service" if unlimited_request_mode == "joint"
+                      else "unlimited_ocr_sglang_page_pool")
+    elif method_id == "pp_structurev3":
+        if execution_mode not in (None, "page_batch"):
+            raise ValueError("PP document route is retired; use single-pipeline page prefetch")
+        profile_id = "pp_structurev3_page_prefetch"
+    elif method_id == "deepseek_ocr2":
+        profile_id = "deepseek_ocr2_page_pool"
+    elif method_id in {"qianfan_ocr", "qianfan_ocr_think"}:
+        profile_id = f"{method_id}_vllm_{qianfan_request_mode}"
+    elif method_id == "mineru_344_2605_popo":
+        if execution_mode not in (None, "vllm_services"):
+            raise ValueError("Popo cold/Transformers execution is archived; use shared vLLM services")
+        profile_id = "mineru_344_2605_popo_vllm_services"
+    elif method_id.startswith("mineru") and execution_mode == "direct":
+        profile_id = f"{method_id}_direct"
+    else:
+        try:
+            profile_id = DEFAULT_PROFILE_BY_METHOD[method_id]
+        except KeyError as exc:
+            raise KeyError(f"No default execution profile for method: {method_id}") from exc
+    return EXECUTION_PROFILE_BY_ID[profile_id]
+
+
+# Non-P options only. Both throughput entrypoints use this same declaration;
+# per-method profiles cannot accumulate unrelated methods' options.
+RUNTIME_ARGUMENTS = {
+    "hunyuan_common": [("hunyuan_runner_env", str, "gdb_hunyuan")],
+    "hunyuan_ar": [("hunyuan_service_env", str, "gdb_hunyuan"),
+        ("hunyuan_vllm_gpu_memory_utilization", float, None),
+        ("hunyuan_vllm_max_model_len", int, None),
+        ("hunyuan_vllm_max_num_batched_tokens", int, 65536),
+        ("hunyuan_vllm_enforce_eager", bool, False)],
+    "qianfan": [("qianfan_service_env", str, "gdb_qianfan"),
+        ("qianfan_request_mode", str, "joint"), ("qianfan_execution_mode", str, "auto")],
+    "deepseek": [("deepseek_service_env", str, "gdb_deepseek_ocr2"),
+        ("deepseek_max_model_len", int, 8192), ("deepseek_max_tokens", int, 8192),
+        ("deepseek_gpu_memory_utilization", float, .90), ("deepseek_preprocess_workers", int, 64),
+        ("deepseek_engine_iteration_timeout_seconds", int, 600)],
+    "paddle": [("paddle_service_env", str, "gdb_paddle_vllm"),
+        ("paddle_vllm_gpu_memory_utilization", float, .55), ("paddle_vllm_max_model_len", int, 16384),
+        ("paddle_vllm_enforce_eager", bool, False)],
+    "glm": [("glm_vllm_gpu_memory_utilization", float, .7), ("glm_layout_model_dir", str, None)],
+    "monkey": [("monkey_models_dir", str, None)],
+    "mineru": [("mineru_vllm_gpu_memory_utilization", float, .55),
+        ("mineru_parse_method", str, "auto"), ("mineru_lang", str, "auto"),
+        ("mineru_disable_formula", bool, False), ("mineru_disable_table", bool, False),
+        ("mineru_api_processing_window_size", int, None), ("mineru_api_task_retention_seconds", int, 3600),
+        ("mineru_task_timeout_seconds", float, 3600.), ("mineru_task_poll_seconds", float, 1.),
+        ("mineru_http_timeout_seconds", float, None), ("mineru_hybrid_batch_ratio", int, None),
+        ("mineru_pdf_render_threads", int, None), ("mineru_intra_op_num_threads", int, None),
+        ("mineru_inter_op_num_threads", int, None)],
+    "youtu": [("youtu_env", str, "gdb_youtu"), ("youtu_model_path", str, None)],
+    "pp": [("pp_device", str, "gpu")],
+}
+DFLASH_KEYS = tuple("hunyuan_dflash_" + key for key in (
+    "profile", "service_env", "cuda_home", "flashinfer_workspace", "gpu_memory_utilization",
+    "max_model_len", "max_num_batched_tokens", "num_speculative_tokens"))
+
+
+def add_runtime_arguments(parser):
+    from config.method_versions import get_method_version
+    from methods.hunyuanocr.dflash import add_dflash_args
+    from methods.unlimited_ocr.commands import add_runtime_args as unlimited_args
+    from methods.pp_structurev3.commands import add_runtime_args as pp_args
+    choices = {"qianfan_request_mode": ("joint", "page_pool"), "qianfan_execution_mode": ("auto", "eager"),
+               "mineru_parse_method": ("auto", "txt", "ocr"), "pp_device": ("gpu", "cpu")}
+    for specs in RUNTIME_ARGUMENTS.values():
+        for key, typ, default in specs:
+            if key == "glm_layout_model_dir":
+                default = str(get_method_version("glmocr").additional_model_paths[0])
+            options = {"action": "store_true"} if typ is bool else {"type": typ}
+            if key in choices:
+                options["choices"] = choices[key]
+            parser.add_argument("--" + key.replace("_", "-"), default=default, **options)
+    add_dflash_args(parser)
+    unlimited_args(parser, include_pressure=False)
+    pp_args(parser, include_batch_scale=False)
+
+
+def runtime_keys(method):
+    if method.startswith("hunyuanocr"):
+        groups = ("hunyuan_common",) if method.endswith("dflash") else ("hunyuan_common", "hunyuan_ar")
+    elif method.startswith("qianfan"):
+        groups = ("qianfan",)
+    elif method.startswith("paddleocr"):
+        groups = ("paddle",)
+    elif method.startswith("monkeyocr"):
+        groups = ("monkey",)
+    elif method in ("mineru_303_2509", "mineru_344_2605"):
+        groups = ("mineru",)
+    else:
+        groups = {"deepseek_ocr2": ("deepseek",), "glmocr": ("glm",), "youtu": ("youtu",),
+                  "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": ()}[method]
+    keys = tuple(key for group in groups for key, _, _ in RUNTIME_ARGUMENTS[group])
+    if method == "hunyuanocr_15_dflash":
+        keys += DFLASH_KEYS
+    if method == "unlimited_ocr_sglang":
+        from methods.unlimited_ocr.commands import RUNTIME_KEYS
+        keys += RUNTIME_KEYS
+    if method == "pp_structurev3":
+        keys += ("pp_render_dpi",)
+    return keys
+
+
+def runtime_options(args, method):
+    return {key: str(value) if isinstance(value := getattr(args, key), Path) else value
+            for key in runtime_keys(method)}
+
+
+def runtime_cli_args(args, method):
+    flags = []
+    for key, value in runtime_options(args, method).items():
+        flag = "--" + key.replace("_", "-")
+        if value is True:
+            flags.append(flag)
+        elif value is not None and value is not False:
+            flags.extend((flag, str(value)))
+    return flags
+
+
+def resolve_runtime_defaults(args, method):
+    if method == "hunyuanocr_15_dflash":
+        from methods.hunyuanocr.dflash import resolve_dflash_args
+        resolve_dflash_args(args)
+    elif method in ("hunyuanocr_10", "hunyuanocr_15"):
+        from methods.hunyuanocr.commands import resolve_ar_gpu_memory_utilization
+        args.hunyuan_vllm_gpu_memory_utilization = resolve_ar_gpu_memory_utilization(method, args.hunyuan_vllm_gpu_memory_utilization)
+        if args.hunyuan_vllm_max_model_len is None:
+            args.hunyuan_vllm_max_model_len = 65536 if method == "hunyuanocr_15" else 32768
+
+
+def profile_for_args(method, args):
+    return resolve_execution_profile(method, qianfan_request_mode=args.qianfan_request_mode,
+        unlimited_request_mode=args.unlimited_ocr_request_mode).profile_id
+
+
+def save_selected_profile(path, method, summary):
+    if summary["status"] != "ok":
+        raise ValueError("Only a successfully measured trial can be saved")
+    profile = summary["execution_profile"]
+    options = summary["runtime_options"]
+    if set(options) != set(runtime_keys(method)):
+        raise ValueError("Profile must contain exactly this method's runtime options")
+    entry = {"pressure": summary["pressure"], "runtime_options": options}
+    _check_profile_entry(method, profile, entry)
+    data = json.loads(path.read_text()) if path.exists() else {"schema_version": 2, "methods": {}}
+    if data["schema_version"] != 2:
+        raise ValueError("Unsupported selected-profile schema; update explicitly before saving")
+    data["methods"].setdefault(method, {})[profile] = entry
+    path.parent.mkdir(parents=True, exist_ok=True)
+    from common import write_json
+    write_json(path, data)
+
+
+def _check_profile_entry(method, profile, entry):
+    if EXECUTION_PROFILE_BY_ID[profile].method_id != method or set(entry) != {"pressure", "runtime_options"}:
+        raise ValueError("Selected-profile identity or fields mismatch")
+    options = entry["runtime_options"]
+    if set(options) != set(runtime_keys(method)):
+        raise ValueError("Incomplete or unrelated runtime options in selected profile")
+    # Restore through the same argument types/choices as the CLI. In particular,
+    # the string "false" must never become a truthy disable-formula setting.
+    parser = argparse.ArgumentParser(exit_on_error=False)
+    add_runtime_arguments(parser)
+    try:
+        parsed = parser.parse_args(runtime_cli_args(argparse.Namespace(**options), method))
+    except (argparse.ArgumentError, SystemExit) as exc:
+        raise ValueError("Invalid runtime option value in selected profile") from exc
+    resolve_runtime_defaults(parsed, method)
+    effective = runtime_options(parsed, method)
+    for key, value in options.items():
+        if value != effective[key] or (isinstance(effective[key], bool) and type(value) is not bool):
+            raise ValueError(f"Selected runtime option has an invalid type or unresolved value: {key}")
+    from config.throughput_pressure import pressure_mapping
+    pressure_mapping(method, entry["pressure"], options.get("qianfan_request_mode", "joint"),
+                     options.get("unlimited_ocr_request_mode", "joint"))
+    actual = resolve_execution_profile(method, qianfan_request_mode=options.get("qianfan_request_mode", "joint"),
+        unlimited_request_mode=options.get("unlimited_ocr_request_mode", "joint")).profile_id
+    if actual != profile:
+        raise ValueError("Selected profile cannot cross request routes")
+
+
+def load_selected_profile(path, method, profile):
+    data = json.loads(path.read_text())
+    if data["schema_version"] != 2:
+        raise ValueError("Unsupported selected-profile schema; no implicit migration")
+    entry = data["methods"][method][profile]
+    _check_profile_entry(method, profile, entry)
+    return entry
