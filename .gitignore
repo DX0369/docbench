@@ -1,0 +1,17 @@
+# Local environments, caches and generated artifacts
+/.venv/
+/.cache/
+/.ruff_cache/
+/models/
+/data/
+/tmp/
+/experiments/
+/reports/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Never import nested repository metadata into the monorepo
+**/.git/

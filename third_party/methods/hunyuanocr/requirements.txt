@@ -1,0 +1,29 @@
+# Core deep learning stack
+torch>=2.1.0
+transformers>=4.57.0
+accelerate>=0.34.0
+deepspeed>=0.14.0
+
+# HuggingFace ecosystem
+safetensors>=0.4.0
+datasets>=2.14.0
+sentencepiece>=0.1.99
+tokenizers>=0.20.0
+
+# Data / image processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Distributed / performance
+einops>=0.7.0
+flash-attn>=2.5.0  # requires manual install: pip install flash-attn --no-build-isolation
+
+# Logging
+tensorboard>=2.15.0
+tqdm>=4.66.0
+
+# Inference is NOT covered by this file. It uses three separate, mutually
+# exclusive environments (vLLM release / vLLM nightly+DFlash / transformers),
+# each with its own requirements.txt under inference/ — see inference/README.md.
+openai>=1.30.0  # OpenAI-compatible client for benchmarking

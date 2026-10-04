@@ -1,0 +1,58 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Training outputs
+output/
+data/
+logs/
+*.log
+tensorboard/
+
+# Downloaded / cached models
+models/
+model_weights/
+*.safetensors
+*.bin
+!hyocr_dflash/*.safetensors    # keep the placeholder empty
+
+# Checkpoints and intermediate files
+checkpoint-*/
+*.pt
+*.pth
+*.ckpt
+
+# Data files (don't commit training data)
+*.jsonl
+!configs/*.jsonl               # allow example configs
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Test / benchmark output
+bench_*.jsonl
+detail_*.jsonl

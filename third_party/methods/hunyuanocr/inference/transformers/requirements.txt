@@ -1,0 +1,49 @@
+# HunyuanOCR-1.5 transformers direct-inference dependencies (no vLLM).
+# Environment: Python 3.12, Linux x86_64, NVIDIA GPU.
+#
+# Hard requirement: transformers >= 5.13.0.
+#   Direct transformers inference needs the `hunyuan_vl` module
+#   (HunYuanVLForConditionalGeneration + HunYuanVLProcessor), introduced in
+#   transformers 5.13.0. Neither 4.57.6 nor 5.5.3 ships it.
+#
+# CUDA version is flexible: unlike DFlash, transformers inference is not tied to
+#   the nightly build or cu130. It merely loads HunYuanVL and runs a normal
+#   forward pass, so any torch that matches your host driver works — usually
+#   WITHOUT the CUDA 13 compat library, which is simpler than the nightly path.
+#
+#   Check the CUDA version your host driver supports (top-right of `nvidia-smi`,
+#   "CUDA Version: X.Y"):
+#     driver CUDA 12.x (e.g. 535 -> 12.8) -> install cu128, no compat needed  <- validated path
+#     driver CUDA 13.x / driver >= 580     -> install cu130, no compat needed
+#     forced to cu130 but driver < 580     -> compat needed (see ../nightly §1.2)
+#
+# This environment cannot also run vLLM: transformers 5.13.0 breaks vLLM's
+#   HunYuanVL loading (AutoImageProcessor.register signature change -> AttributeError).
+#   To run vLLM (AR / DFlash), use the separate ../nightly or ../vllm_0_18_1 env.
+#
+# ============================================================================
+# From scratch (recommended; example host driver 535 / CUDA 12.8 -> cu128, no compat):
+#   # Behind a corporate proxy: export http_proxy=... https_proxy=...
+#   pip install -U uv
+#   uv venv --python 3.12 && source .venv/bin/activate
+#   # NOTE: install BOTH torch and torchvision. torchvision is a REQUIRED
+#   #   dependency of HunYuanVLImageProcessor; omitting it raises
+#   #   "Could not load any image processor ... Missing optional dependencies: torchvision".
+#   uv pip install torch torchvision --torch-backend=cu128
+#   uv pip install "transformers==5.13.0" accelerate pillow tqdm
+#
+# Exact versions validated (cu128, host driver 535, no compat):
+#   python       3.12.3
+#   torch        2.11.0+cu128
+#   torchvision  0.26.0+cu128
+#   transformers 5.13.0
+#   accelerate   1.14.0
+# ============================================================================
+
+transformers==5.13.0
+accelerate>=1.1.0
+pillow>=10.0.0
+tqdm>=4.66.0
+# torch + torchvision: see the install notes above; pick the CUDA backend
+#   (cu128 / cu130) that matches your host driver — not pinned here.
+#   Both are mandatory (torchvision is a hard dependency of the image processor).

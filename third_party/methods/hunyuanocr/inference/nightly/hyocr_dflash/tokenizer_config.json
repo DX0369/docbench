@@ -1,0 +1,26 @@
+{
+  "backend": "tokenizers",
+  "bos_token": "<｜hy_begin▁of▁sentence｜>",
+  "clean_up_tokenization_spaces": true,
+  "eos_token": "<｜hy_Assistant｜>",
+  "image_end_token": "<｜hy_place▁holder▁no▁101｜>",
+  "image_start_token": "<｜hy_place▁holder▁no▁100｜>",
+  "image_token": "<｜hy_place▁holder▁no▁102｜>",
+  "is_local": true,
+  "local_files_only": false,
+  "model_max_length": 1000000000000000019884624838656,
+  "model_specific_special_tokens": {
+    "image_end_token": "<｜hy_place▁holder▁no▁101｜>",
+    "image_start_token": "<｜hy_place▁holder▁no▁100｜>",
+    "image_token": "<｜hy_place▁holder▁no▁102｜>",
+    "video_end_token": "<｜hy_place▁holder▁no▁105｜>",
+    "video_start_token": "<｜hy_place▁holder▁no▁104｜>",
+    "video_token": "<｜hy_place▁holder▁no▁665｜>"
+  },
+  "pad_token": "<｜hy_▁pad▁｜>",
+  "processor_class": "HunYuanVLProcessor",
+  "tokenizer_class": "TokenizersBackend",
+  "video_end_token": "<｜hy_place▁holder▁no▁105｜>",
+  "video_start_token": "<｜hy_place▁holder▁no▁104｜>",
+  "video_token": "<｜hy_place▁holder▁no▁665｜>"
+}

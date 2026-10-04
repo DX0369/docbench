@@ -1,0 +1,65 @@
+{
+  "image_processor": {
+    "do_convert_rgb": true,
+    "do_normalize": true,
+    "do_rescale": true,
+    "do_resize": true,
+    "image_mean": [
+      0.48145466,
+      0.4578275,
+      0.40821073
+    ],
+    "image_processor_type": "HunYuanVLImageProcessor",
+    "image_std": [
+      0.26862954,
+      0.26130258,
+      0.27577711
+    ],
+    "max_pixels": 16777216,
+    "merge_size": 2,
+    "min_pixels": 262144,
+    "patch_size": 16,
+    "resample": 1,
+    "rescale_factor": 0.00392156862745098,
+    "size": {
+      "longest_edge": 16777216,
+      "shortest_edge": 262144
+    },
+    "temporal_patch_size": 1
+  },
+  "processor_class": "HunYuanVLProcessor",
+  "video_processor": {
+    "data_format": "channels_first",
+    "default_to_square": true,
+    "do_convert_rgb": true,
+    "do_normalize": true,
+    "do_rescale": true,
+    "do_resize": true,
+    "do_sample_frames": false,
+    "image_mean": [
+      0.48145466,
+      0.4578275,
+      0.40821073
+    ],
+    "image_std": [
+      0.26862954,
+      0.26130258,
+      0.27577711
+    ],
+    "max_frames": 768,
+    "max_pixels": 4194304,
+    "merge_size": 2,
+    "min_frames": 4,
+    "min_pixels": 262144,
+    "patch_size": 16,
+    "resample": 3,
+    "rescale_factor": 0.00392156862745098,
+    "return_metadata": false,
+    "size": {
+      "longest_edge": 4194304,
+      "shortest_edge": 262144
+    },
+    "temporal_patch_size": 1,
+    "video_processor_type": "HunYuanVLVideoProcessor"
+  }
+}

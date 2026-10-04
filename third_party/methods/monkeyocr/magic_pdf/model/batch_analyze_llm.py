@@ -1,0 +1,224 @@
+import time
+from copy import deepcopy
+
+from loguru import logger
+
+from magic_pdf.config.constants import MODEL_NAME
+from PIL import Image
+from magic_pdf.model.sub_modules.model_utils import (
+    clean_vram, crop_img)
+
+YOLO_LAYOUT_BASE_BATCH_SIZE = 8
+
+class BatchAnalyzeLLM:
+    def __init__(self, model):
+        self.model = model
+
+    def __call__(self, images: list, split_pages: bool = False, pred_abandon: bool = False) -> list:
+        images_layout_res = []
+
+        layout_start_time = time.time()
+        if self.model.layout_model_name == MODEL_NAME.DocLayout_YOLO:
+            # doclayout_yolo
+            layout_images = []
+            for image_index, image in enumerate(images):
+                pil_img = Image.fromarray(image)
+                layout_images.append(pil_img)
+
+            images_layout_res += self.model.layout_model.batch_predict(
+                # layout_images, self.batch_ratio * YOLO_LAYOUT_BASE_BATCH_SIZE
+                layout_images, YOLO_LAYOUT_BASE_BATCH_SIZE
+            )
+                            
+        elif self.model.layout_model_name in [MODEL_NAME.PaddleXLayoutModel, MODEL_NAME.PP_DoclayoutV2]:
+            # PP-DocLayout_plus-L
+            paddlex_layout_images = []
+            for image_index, image in enumerate(images):
+                pil_img = Image.fromarray(image)
+                paddlex_layout_images.append(pil_img)
+            layout_results = self.model.layout_model.batch_predict(
+                paddlex_layout_images, YOLO_LAYOUT_BASE_BATCH_SIZE 
+            )
+            ori_layout_results = deepcopy(layout_results)
+            
+            images_layout_res += layout_results
+        else: 
+            logger.error(f"Unsupported layout model name: {self.model.layout_model_name}")
+            raise ValueError(f"Unsupported layout model name: {self.model.layout_model_name}")
+
+        logger.info(
+            f'layout time: {round(time.time() - layout_start_time, 2)}, image num: {len(images)}'
+        )
+
+        if pred_abandon:
+            for index in range(len(images)):
+                layout_res = images_layout_res[index]
+                for res in layout_res:
+                    if res['category_id'] == 2:
+                        res['category_id'] = 1
+
+        clean_vram(self.model.device, vram_threshold=8)
+
+        lmm_ocr_start = time.time()
+        logger.info('LMM OCR start (done/total text blocks):')
+        # Check if split_pages is True and handle pages without valid cids
+        if split_pages or len(images) == 1:
+            cid2instruction = [0, 1, 4, 5, 6, 7, 8, 14, 101]
+            
+            pages_to_process_directly = []
+            for index in range(len(images)):
+                layout_res = images_layout_res[index]
+                # Check if this page has any valid cids
+                has_valid_cid = any(res['category_id'] in cid2instruction for res in layout_res)
+                
+                if not has_valid_cid:
+                    pages_to_process_directly.append(index)
+                    logger.info(f'Page {index} has no valid layout elements, will process directly')
+            
+            # Process pages without valid cids directly
+            if pages_to_process_directly:
+                direct_images = []
+                direct_messages = []
+                for page_idx in pages_to_process_directly:
+                    pil_img = Image.fromarray(images[page_idx])
+                    direct_images.append(pil_img)
+                    direct_messages.append(f'''Please output the text content from the image.''')
+                
+                # Get direct recognition results
+                direct_results = self.model.chat_model.batch_inference(direct_images, direct_messages)
+                
+                # Replace layout results for these pages
+                for i, page_idx in enumerate(pages_to_process_directly):
+                    # Create a single result covering the whole page
+                    height, width = images[page_idx].shape[:2]
+                    pre_res = {
+                        'category_id': 200,
+                        'score': 1.0,
+                        'poly': [0, 0, width, 0, width, height, 0, height]
+                    }
+                    single_res = {
+                        'category_id': 15,
+                        'score': 1.0,
+                        'text': direct_results[i],
+                        'poly': [0, 0, width, 0, width, height, 0, height]
+                    }
+                    images_layout_res[page_idx] = [pre_res, single_res]
+
+        new_images_all = []
+        cids_all = []
+        page_idxs = []
+        for index in range(len(images)):
+            layout_res = images_layout_res[index]
+            pil_img = Image.fromarray(images[index])
+            new_images = []
+            cids = []
+            for res in layout_res:
+                pad_size = 0 if res['category_id'] == 5 else 50
+                new_image, useful_list = crop_img(
+                    res, pil_img, crop_paste_x=pad_size, crop_paste_y=pad_size
+                )
+                new_images.append(new_image)
+                cids.append(res['category_id'])
+            new_images_all.extend(new_images)
+            cids_all.extend(cids)
+            page_idxs.append(len(new_images_all) - len(new_images))
+        ocr_result = self.batch_lmm_ocr(new_images_all, cids_all)
+        for index in range(len(images)):
+            ocr_results = []
+            layout_res = images_layout_res[index]
+            for i in range(len(layout_res)):
+                res = layout_res[i]
+                ocr = ocr_result[page_idxs[index]+i]
+                if res['category_id'] in [8, 14]:
+                    temp_res = deepcopy(res)
+                    temp_res['category_id'] = 14
+                    temp_res['score'] = 1.0
+                    temp_res['latex'] = ocr
+                    ocr_results.append(temp_res)
+                elif res['category_id'] in [0, 1, 2, 4, 6, 7, 101]:
+                    temp_res = deepcopy(res)
+                    temp_res['category_id'] = 15
+                    temp_res['score'] = 1.0
+                    temp_res['text'] = ocr
+                    ocr_results.append(temp_res)
+                elif res['category_id'] == 5:
+                    res['score'] = 1.0
+                    res['html'] = ocr
+                elif res['category_id'] == 15:
+                    # This is already a direct recognition result, keep it as is
+                    pass
+                elif res['category_id'] == 200:
+                    res['category_id'] = 1
+            layout_res.extend(ocr_results)
+        logger.info(
+            f'LMM ocr time: {round(time.time() - lmm_ocr_start, 2)}, image num: {len(images)}'
+        )
+
+        # Ensure ori_layout_results is defined for all model types.
+        # For models where ori_layout_results was not set earlier (e.g., DocLayout_YOLO),
+        # fall back to the current images_layout_res.
+        if 'ori_layout_results' not in locals():
+            ori_layout_results = images_layout_res
+        layout_bboxes = []
+        for layout_res in ori_layout_results:
+            bboxes = []
+            for res in layout_res:
+                bboxes.append([res['poly'][0], res['poly'][1], res['poly'][4], res['poly'][5]])
+            layout_bboxes.append(bboxes)
+
+        return images_layout_res, layout_bboxes
+
+    def batch_lmm_ocr(self, images, cat_ids, version='lmdeploy'):
+        def sanitize_md(output):
+            return output.replace('<md>', '').replace('</md>', '').replace('md\n','').strip()
+        def sanitize_mf(output:str):
+            return output.replace('$$', '\$\$').strip('$').strip()
+        def sanitize_html(output):
+            output = output.replace('```html','').replace('```','').replace('<html>','').replace('</html>','').strip()
+            if not output.endswith('</table>'):
+                output += '</table>'
+            return output.strip()
+        assert len(images) == len(cat_ids)
+        instruction = f'''Please output the text content from the image.'''
+        instruction_mf = f'''Please write out the expression of the formula in the image using LaTeX format.'''
+        instruction_table = f'''This is the image of a table. Please output the table in html format.'''
+        cid2instruction = {
+            0: instruction,
+            1: instruction,
+            # 2: instruction,
+            4: instruction,
+            5: instruction_table,
+            6: instruction,
+            7: instruction,
+            8: instruction_mf,
+            # 9: instruction,
+            14: instruction_mf,
+            101: instruction,
+        }
+        new_images = []
+        messages = []
+        ignore_idx = []
+        outs = []
+        for i in range(len(images)):
+            if cat_ids[i] not in cid2instruction:
+                ignore_idx.append(i)
+                continue
+            new_images.append(images[i])
+            messages.append(cid2instruction[cat_ids[i]])
+        if len(new_images) == 0:
+            return [''] * len(images)
+        out = self.model.chat_model.batch_inference(new_images, messages)
+        outs.extend(out)
+        for j in ignore_idx:
+            outs.insert(j, '')
+        messages.clear()
+        ignore_idx.clear()
+        for j in range(len(outs)):
+            if cat_ids[j] in cid2instruction:
+                if cat_ids[j] == 5:
+                    outs[j] = sanitize_html(outs[j])
+                elif cat_ids[j] in [8, 14]:
+                    outs[j] = sanitize_mf(outs[j])
+                else:
+                    outs[j] = sanitize_md(outs[j])
+        return outs

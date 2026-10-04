@@ -1,0 +1,15 @@
+# HunyuanOCR-1.5 local deployment dependencies (vLLM inference).
+# Environment: Python 3.10, CUDA 12.8, Linux x86_64.
+#
+# Install:
+#   conda create -n hunyuanocr python=3.10 -y && conda activate hunyuanocr
+#   pip install -r requirements.txt
+#
+# Note: vllm 0.18.1 automatically pulls the matching torch 2.10 /
+#       transformers 4.57 / flashinfer, so there is no need to specify a torch
+#       version by hand. For a 100%-reproducible pinned environment, use
+#       requirements-lock.txt instead.
+
+vllm==0.18.1
+openai>=1.30.0
+pillow>=10.0.0

@@ -1,0 +1,61 @@
+# HunyuanOCR-1.5 + DFlash (speculative decoding) deployment dependencies.
+# Environment: Python 3.12, CUDA 13 (torch cu130), Linux x86_64, NVIDIA GPU.
+#
+# NOTE: the DFlash "dflash" speculative method is registered ONLY in the vLLM
+#   nightly (cu130) build. Release builds (including 0.18.1 / 0.24.0) do NOT
+#   support it, so the nightly build is mandatory here. When the host driver is
+#   < 580 you also need the CUDA 13 compat library (see README.md §1.2, which
+#   includes the download URL).
+#
+# ============================================================================
+# Full install procedure (run in order; the three "required" steps below are
+# all mandatory — see README.md §1 for details).
+# ============================================================================
+#   # Behind a corporate proxy, export it first:
+#   #   export http_proxy=http://<proxy>:<port> https_proxy=http://<proxy>:<port>
+#   pip install -U uv
+#   uv venv --python 3.12 && source .venv/bin/activate
+#
+#   # 1) Install vLLM nightly (cu130) — this also pulls torch cu130 /
+#   #    transformers / flashinfer.
+#   uv pip install -U vllm --torch-backend=cu130 \
+#       --extra-index-url https://wheels.vllm.ai/nightly
+#   uv pip install openai pillow
+#
+#   # 2) REQUIRED: pin transformers back to 5.5.3.
+#   #    The nightly install pulls transformers 5.13.0 by default, but 5.13.0
+#   #    crashes vLLM when loading HunYuanVL (AutoImageProcessor.register is
+#   #    called with a string; the 5.13 signature change raises
+#   #    "AttributeError: 'str' object has no attribute '__module__'").
+#   #    Downgrade explicitly (--no-deps keeps torch/vllm untouched):
+#   uv pip install "transformers==5.5.3" --no-deps
+#
+#   # 3) REQUIRED: uninstall torchcodec.
+#   #    The nightly install pulls torchcodec, which loads FFmpeg shared
+#   #    libraries (libavutil.so.56, ...) at import time. A missing library
+#   #    raises OSError (not ImportError), which vLLM's try/except does not
+#   #    catch, crashing `vllm serve`. HunyuanOCR is an image model and needs
+#   #    no video decoding, so remove it:
+#   uv pip uninstall torchcodec
+#
+# ============================================================================
+# Exact versions validated end-to-end (for reproduction / debugging):
+#   vllm         0.23.1rc1.dev825 ~ dev869   (nightly cu130; the suffix rolls daily)
+#   torch        2.11.0+cu130
+#   transformers 5.5.3            <-- must be this; do NOT upgrade to 5.13.0
+#   flashinfer   0.6.13
+#   openai       2.44.0
+#   pillow       12.3.0
+#   (torchcodec  uninstalled)
+# ============================================================================
+
+# Client-side dependencies (safe to pip install directly):
+openai>=1.30.0
+pillow>=10.0.0
+
+# The server side (vLLM / transformers / torchcodec handling) is installed via
+# the procedure above and intentionally not pinned here (the nightly version
+# rolls daily; transformers must be ==5.5.3; torchcodec must be uninstalled).
+
+# Optional: faster loading of large weights (not a hard dependency here).
+# runai-model-streamer

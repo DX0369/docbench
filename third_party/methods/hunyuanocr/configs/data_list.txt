@@ -1,0 +1,10 @@
+# One raw OCR JSONL path per line (absolute paths).
+# Blank lines and lines starting with '#' are ignored.
+#
+# Each line points to a JSONL file where every line is a training sample.
+# See docs/data_format.md for the required JSONL schema.
+#
+# Example:
+# /path/to/dataset_A.jsonl
+# /path/to/dataset_B.jsonl
+# /path/to/dataset_C.jsonl
