@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-04 14:02 +08:00
+更新时间：2026-10-05 00:26 +08:00
 
 ## 当前阶段
 
@@ -17,6 +17,7 @@
 - 统一保留最小输出：结构化结果、运行状态、失败记录和必要诊断；不默认保存原始响应或图片资产。
 - 已完成方法版本审计、源码 HEAD 审计、smoke/dry-run、P 映射和失败传播的定向核对。详细运行规则见 [`code/docs/RUN_COMMANDS.md`](code/docs/RUN_COMMANDS.md) 和 [`code/docs/THROUGHPUT_TUNING_PROTOCOL.md`](code/docs/THROUGHPUT_TUNING_PROTOCOL.md)。
 - MinerU-Popo 已接入组合流程，但由于双模型容量和稳定吞吐配置尚未确认，暂不纳入本轮正式吞吐调参。
+- GPU 7 两文档 latency smoke 已完成并保存在 `tmp/latency_smoke/gpu7_2pdf_20261004_231416_retry1/`：除 MinerU-Popo 外的 17 个方法 ID（共 20 条执行路线）均完成顺序处理；Qianfan 普通/think 的 joint 路线因 14 页英文文档输入超过 32768 上下文而明确失败，page_pool 路线通过。该结果仅验证入口顺序、输出和失败记录，不代表正式吞吐结论。
 
 ## 当前实验状态
 

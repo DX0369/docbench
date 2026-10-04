@@ -12,10 +12,11 @@
 ```bash
 export GDB_ROOT=/data/wangsq/code/global_doc_bench
 export CODE="$GDB_ROOT/code"
+export PDF_ROOT="$GDB_ROOT/data/pdf_tree"
 export INPUTS="$CODE/config/throughput_manifests/rtx3090_20.json"
 export GPU=6                         # 运行前由用户确认空闲
-export RUN_ID="throughput_$(date +%Y%m%d_%H%M%S)"
-export RUN_ROOT="$GDB_ROOT/experiments/throughput/$RUN_ID"
+export RUN_ID="benchmark_$(date +%Y%m%d_%H%M%S)"
+export RUN_ROOT="$GDB_ROOT/experiments/benchmark/$RUN_ID"
 export PY=/data/wangsq/software/miniconda/bin/python
 
 mkdir -p "$RUN_ROOT/outputs" "$RUN_ROOT/logs"
@@ -24,6 +25,10 @@ cd "$CODE"
 
 不要复制 PDF；清单只引用 `data/pdf_tree` 中的原始文件。每次运行必须使用新的
 `RUN_ID`，不要覆盖既有输出。
+
+`--pdf-list-file` 和 `--input-root` 二选一：传入清单时只运行清单中的 PDF；只传
+`--input-root` 时递归发现该目录下的全部 PDF。当前固定 20 文档协议使用
+`rtx3090_20.json`；完整数据运行应使用 `$PDF_ROOT`。
 
 ## 固定 P：所有正式吞吐方法
 
@@ -96,6 +101,25 @@ run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
     --log-root "$RUN_ROOT/logs/<METHOD_ID>"
 ```
 
+### 完整 PDF 目录的正式固定 P 运行
+
+下面的入口不传 `--pdf-list-file`，会递归处理 `$PDF_ROOT` 下的全部 PDF。它适用于
+已经选定 P 后的正式运行；当前数据目录预计包含 163 份 PDF。
+
+```bash
+"$PY" src/benchmark/run_single_gpu.py \
+    --method <METHOD_ID> \
+    --gpu-id "$GPU" \
+    --pressure <P> \
+    --input-root "$PDF_ROOT" \
+    --run-name "${RUN_ID}_<METHOD_ID>_full" \
+    --output-root-base "$RUN_ROOT/outputs" \
+    --log-root "$RUN_ROOT/logs/<METHOD_ID>_full"
+```
+
+正式吞吐运行不添加 `--latency-mode` 或 `--dry-run`。完整目录运行与 20 文档清单运行
+必须使用不同的 `RUN_ID` 和输出目录。
+
 ## 压力搜索
 
 调参只使用固定 20 文档清单；不在搜索入口复制 PDF：
@@ -110,6 +134,22 @@ run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
     --run-name "${RUN_ID}_sweep" \
     --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
 ```
+
+如果要对完整目录搜索，去掉 `--pdf-list-file`，改为显式指定：
+
+```bash
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods <METHOD_ID> \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --input-root "$PDF_ROOT" \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --run-name "${RUN_ID}_<METHOD_ID>_full_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+压力搜索会在该 run 内保存实际输入清单，便于复核；这不是需要用户预先创建的
+job 文件。
 
 Qianfan 和 Unlimited 的 `page_pool` 是独立路线，搜索时必须显式选择，不能把
 `joint` 的搜索结果当作 `page_pool` 配置：
@@ -140,6 +180,95 @@ Qianfan 和 Unlimited 的 `page_pool` 是独立路线，搜索时必须显式选
 
 先只检查命令映射时加 `--dry-run`；只有真实运行并确认成功的配置才保存 profile。
 失败档必须保留在该 run 的日志中，不能由前一个成功档替代。
+
+## 正式 Latency 测试
+
+Latency 与吞吐是两类独立的正式指标：吞吐测试不同 P 下的 pages/s、docs/s；
+Latency 固定 `P=1`，使用单 GPU、单 worker，逐个 PDF 记录处理耗时。Latency
+结果不能与吞吐结果共用 run ID 或输出目录。
+
+正式 Latency 使用 `experiments/latency/<run_id>/`；两文档流程验证使用下面的
+`tmp/latency_smoke/` 小节，不把 smoke 结果当作正式结论。
+
+### 固定清单的正式 Latency
+
+```bash
+export LATENCY_RUN_ID="latency_$(date +%Y%m%d_%H%M%S)"
+export LATENCY_ROOT="$GDB_ROOT/experiments/latency/$LATENCY_RUN_ID"
+
+mkdir -p "$LATENCY_ROOT/outputs" "$LATENCY_ROOT/logs"
+
+"$PY" src/benchmark/run_single_gpu.py \
+    --method <METHOD_ID> \
+    --gpu-id "$GPU" \
+    --pressure 1 \
+    --latency-mode \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${LATENCY_RUN_ID}_<METHOD_ID>" \
+    --output-root-base "$LATENCY_ROOT/outputs" \
+    --log-root "$LATENCY_ROOT/logs/<METHOD_ID>"
+```
+
+### 完整 PDF 目录的正式 Latency
+
+不传 `--pdf-list-file` 时，入口递归处理 `$PDF_ROOT` 下的全部 PDF：
+
+```bash
+"$PY" src/benchmark/run_single_gpu.py \
+    --method <METHOD_ID> \
+    --gpu-id "$GPU" \
+    --pressure 1 \
+    --latency-mode \
+    --input-root "$PDF_ROOT" \
+    --run-name "${LATENCY_RUN_ID}_<METHOD_ID>_full" \
+    --output-root-base "$LATENCY_ROOT/outputs" \
+    --log-root "$LATENCY_ROOT/logs/<METHOD_ID>_full"
+```
+
+Latency 模式只改变文档之间的调度：runtime/service 只启动一次，前一个 PDF
+完成并写出结果后才提交下一个 PDF；页面、区域和组件内部的官方并发机制保持不变。
+每个方法应生成 `latency_summary.json`，记录单文档耗时、处理总时间、启动时间和
+失败文档。Latency 不计算 GT 或 scorer；MinerU-Popo 当前不纳入该协议。
+
+## 两文档 latency smoke（不属于正式吞吐结果）
+
+该模式只验证“单个 PDF 完成后再处理下一个 PDF”。输入清单或 native 临时输入根目录
+应放在 `tmp/latency_smoke/<run_id>/`，输出和日志也必须留在 `tmp`，不能写入
+`experiments/benchmark`。
+
+服务型方法命令：
+
+```bash
+export LATENCY_ROOT="$GDB_ROOT/tmp/latency_smoke/<run_id>"
+export LATENCY_INPUTS="$LATENCY_ROOT/inputs/pdf_list.txt"
+
+"$PY" src/benchmark/run_single_gpu.py \
+    --method <METHOD_ID> \
+    --gpu-id "$GPU" \
+    --pressure 1 \
+    --latency-mode \
+    --pdf-list-file "$LATENCY_INPUTS" \
+    --output-root-base "$LATENCY_ROOT/outputs" \
+    --log-root "$LATENCY_ROOT/logs/<METHOD_ID>" \
+    --run-name "latency_<METHOD_ID>"
+```
+
+Marker、Youtu 和 PP-StructureV3 使用 native 入口。`inputs/native/` 中应只放两个
+输入 PDF 的软链接，不复制原始 PDF：
+
+```bash
+"$PY" src/benchmark/run_native_batch.py \
+    --methods marker,youtu,pp_structurev3 \
+    --gpus "$GPU" \
+    --latency-mode \
+    --input-root "$LATENCY_ROOT/inputs/native" \
+    --output-root-base "$LATENCY_ROOT/outputs/native" \
+    --log-root "$LATENCY_ROOT/logs/native" \
+    --run-id "latency_native"
+```
+
+latency 模式固定使用单 GPU、单 worker，不生成 `job_*.txt`；每个方法的
+`latency_summary.json` 应记录两个文档且顺序为 1、2。
 
 ## MinerU-Popo（不参与当前吞吐定版）
 

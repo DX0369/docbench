@@ -15,6 +15,123 @@ from execution.queue import claim_next_job, collect_job_failures, ensure_queue_l
 QueueHandler = Callable[[Path, list[Path]], bool | tuple[bool, dict[str, Any]]]
 
 
+def _latency_inputs_from_environment() -> list[Path] | None:
+    """Return the in-memory latency input sequence, when requested by a launcher.
+
+    The latency runner deliberately uses an environment payload instead of the
+    normal file-backed queue.  The payload is created from an existing manifest
+    by the parent launcher; no per-document job files are needed.
+    """
+    if os.environ.get("GDB_LATENCY_MODE") != "1":
+        return None
+    raw = os.environ.get("GDB_LATENCY_PDF_PATHS", "")
+    try:
+        values = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("GDB_LATENCY_PDF_PATHS must contain JSON") from exc
+    if not isinstance(values, list) or not values or not all(isinstance(item, str) for item in values):
+        raise ValueError("GDB_LATENCY_PDF_PATHS must be a non-empty JSON string list")
+    # Keep the launcher-provided spelling instead of resolving symlinks. Native
+    # latency runs use a temporary symlink input root; output layout must remain
+    # relative to that root rather than jumping back to the canonical PDF path.
+    paths = [Path(item).expanduser() for item in values]
+    if len(paths) != len(set(paths)):
+        raise ValueError("Latency input sequence contains duplicate PDFs")
+    return paths
+
+
+def _write_latency_records(path: Path, records: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
+
+def run_latency_sequence_worker(
+    *,
+    worker_id: str,
+    fail_fast: bool,
+    process_job: QueueHandler,
+    input_root: Path,
+    output_root: Path,
+) -> bool:
+    """Process one PDF at a time without creating queue job files.
+
+    Method workers keep their existing ``process_job`` callback.  This path
+    only changes document grouping and records one timing entry per document;
+    model/service initialization remains outside the sequence.
+    """
+    pdf_paths = _latency_inputs_from_environment()
+    if pdf_paths is None:
+        raise RuntimeError("run_latency_sequence_worker requires GDB_LATENCY_MODE=1")
+    record_path = os.environ.get("GDB_LATENCY_RECORD_PATH")
+    if not record_path:
+        raise ValueError("GDB_LATENCY_RECORD_PATH is required in latency mode")
+
+    records: list[dict[str, Any]] = []
+    had_failure = False
+    with queue_processing_timing(Path(os.environ.get("GDB_LATENCY_TIMING_ROOT", "")), worker_id):
+        for sequence, pdf_path in enumerate(pdf_paths, start=1):
+            started = time.perf_counter()
+            callback_error = None
+            callback_failed = False
+            try:
+                result = process_job(None, [pdf_path])
+                if isinstance(result, tuple):
+                    callback_failed = bool(result[0])
+                else:
+                    callback_failed = bool(result)
+            except BaseException as exc:  # noqa: BLE001
+                callback_failed = True
+                callback_error = f"{type(exc).__name__}: {exc}"
+                if fail_fast:
+                    had_failure = True
+            elapsed = round(time.perf_counter() - started, 6)
+
+            from execution.queue import collect_job_failures
+            outcomes = collect_job_failures(
+                input_root=input_root,
+                output_root=output_root,
+                pdf_paths=[pdf_path],
+            )
+            outcome = outcomes[0] if outcomes else None
+            failed = callback_failed or outcome is not None
+            had_failure = had_failure or failed
+            record: dict[str, Any] = {
+                "sequence": sequence,
+                "pdf_path": str(pdf_path),
+                "status": "failed" if failed else "ok",
+                "processing_seconds": elapsed,
+            }
+            if callback_error:
+                record["error"] = callback_error
+            if outcome is not None:
+                record["failure"] = outcome
+            if not failed:
+                try:
+                    from validation.validate_outputs import validate_completed_page_counts
+                    method_id = os.environ.get("GDB_LATENCY_METHOD")
+                    if method_id:
+                        counts, _ = validate_completed_page_counts(
+                            method_id, input_root, output_root, [pdf_path]
+                        )
+                        if pdf_path in counts:
+                            record["input_page_count"] = counts[pdf_path]
+                except Exception as exc:  # noqa: BLE001
+                    record["page_count_warning"] = f"{type(exc).__name__}: {exc}"
+            records.append(record)
+            _write_latency_records(Path(record_path), records)
+            if failed and (fail_fast or callback_error is not None):
+                break
+            if outcome is not None and any(
+                item.get("runtime_unusable") or item.get("record_error")
+                for item in outcomes
+            ):
+                break
+    _write_latency_records(Path(record_path), records)
+    return had_failure
+
+
 def write_timing_state(path: Path, payload: dict[str, Any]) -> None:
     """Single-writer atomic state, under the existing per-run queue directory."""
     temp = path.with_suffix(".tmp")
@@ -97,6 +214,14 @@ def run_pdf_queue_worker(
     input_root: Path | None = None,
     output_root: Path | None = None,
 ) -> bool:
+    if _latency_inputs_from_environment() is not None:
+        return run_latency_sequence_worker(
+            worker_id=worker_id,
+            fail_fast=fail_fast,
+            process_job=process_job,
+            input_root=input_root,
+            output_root=output_root,
+        )
     with queue_processing_timing(queue_dir, worker_id):
         return _consume_pdf_queue(queue_dir=queue_dir, worker_id=worker_id, fail_fast=fail_fast,
                                   process_job=process_job, allow_partial_success=allow_partial_success,

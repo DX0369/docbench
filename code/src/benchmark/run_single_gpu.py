@@ -77,6 +77,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--startup-timeout", type=int, default=900)
     parser.add_argument("--startup-poll-seconds", type=float, default=3.)
     parser.add_argument("--allow-partial-success", action="store_true", help="Diagnostic only; never selected by the tuner.")
+    parser.add_argument(
+        "--latency-mode",
+        action="store_true",
+        help="Process the existing PDF list sequentially in memory with one document per callback.",
+    )
     parser.add_argument("--keep-trial-outputs", action="store_true", default=True)
     parser.add_argument("--discard-successful-outputs", dest="keep_trial_outputs", action="store_false",
                         help="Tuner only: discard successful temporary document outputs.")
@@ -84,6 +89,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true")
     add_runtime_arguments(parser)
     args = parser.parse_args()
+    if args.latency_mode and args.pressure is not None and args.pressure != 1:
+        parser.error("--latency-mode requires --pressure 1")
+    if args.latency_mode and args.profile_file is not None:
+        parser.error("--latency-mode cannot use a saved throughput profile")
     if args.profile_file is not None:
         runtime_flags = {"--" + key.replace("_", "-") for key in runtime_keys(args.method)}
         if any(token.split("=")[0] in runtime_flags for token in sys.argv[1:]):
@@ -98,8 +107,12 @@ def parse_args() -> argparse.Namespace:
     resolve_runtime_defaults(args, args.method)
     outer, overrides, mapping, docs = pressure_mapping(args.method, args.pressure,
         args.qianfan_request_mode, args.unlimited_ocr_request_mode)
+    if args.latency_mode and outer != 1:
+        parser.error("--latency-mode requires pressure 1 to map to one worker")
     for key, value in overrides.items():
         setattr(args, key, value)
+    if args.latency_mode and args.method == "marker" and args.marker_workers != 1:
+        parser.error("--latency-mode requires one Marker document worker")
     args.outer_concurrency, args.docs_per_job, args.pressure_mapping = outer, docs, mapping
     if args.input_root is None:
         args.input_root = PDF_ROOT
@@ -143,6 +156,7 @@ def _build_worker_env_overrides(
     config: Any,
     base_args: argparse.Namespace,
     method_spec: MethodSpec,
+    worker_id: str,
 ) -> dict[str, str]:
     """Build env_overrides for a worker process, including method-specific fixes."""
     env: dict[str, str] = {"CUDA_VISIBLE_DEVICES": str(base_args.gpu_id)}
@@ -167,6 +181,18 @@ def _build_worker_env_overrides(
         # this environment; force offline mode so cached models are used.
         env["HF_HUB_OFFLINE"] = "1"
         env["TRANSFORMERS_OFFLINE"] = "1"
+
+    if getattr(base_args, "latency_mode", False):
+        env["GDB_LATENCY_MODE"] = "1"
+        env["GDB_LATENCY_METHOD"] = method
+        env["GDB_LATENCY_PDF_PATHS"] = json.dumps(
+            [str(path) for path in base_args.latency_pdf_paths],
+            ensure_ascii=False,
+        )
+        env["GDB_LATENCY_RECORD_PATH"] = str(
+            base_args.latency_record_root / f"{worker_id}.json"
+        )
+        env["GDB_LATENCY_TIMING_ROOT"] = str(base_args.latency_timing_root)
 
     return env
 
@@ -262,6 +288,42 @@ def successful_inputs(pdf_paths, job_statuses, failed_docs, unprocessed_docs):
     return [path for path in pdf_paths if str(path) in recorded and str(path) not in excluded]
 
 
+def load_latency_job_statuses(record_root: Path, pdf_paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Convert the worker's in-memory latency records to queue-compatible status rows."""
+    record_paths = sorted(record_root.glob("*.json")) if record_root.exists() else []
+    records: list[dict[str, Any]] = []
+    for path in record_paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            raise ValueError(f"Latency record must be a list: {path}")
+        records.extend(payload)
+    by_path = {str(item.get("pdf_path")): item for item in records}
+    statuses: list[dict[str, Any]] = []
+    for pdf_path in pdf_paths:
+        item = by_path.get(str(pdf_path))
+        if item is None:
+            continue
+        failed = item.get("status") != "ok"
+        status: dict[str, Any] = {
+            "job_pdf_paths": [str(pdf_path)],
+            "failed": failed,
+            "processing_seconds": item.get("processing_seconds"),
+        }
+        if failed:
+            failure = item.get("failure") or {}
+            status["failed_docs"] = [{
+                "pdf_path": str(pdf_path),
+                "reason": str(failure.get("reason") or item.get("error") or "latency document failed"),
+                "error_json": failure.get("error_json"),
+            }]
+        elif item.get("input_page_count") is not None:
+            status["successful_input_page_counts"] = {
+                str(pdf_path): item["input_page_count"]
+            }
+        statuses.append(status)
+    return statuses, records
+
+
 
 
 def run_trial(
@@ -274,6 +336,8 @@ def run_trial(
     concurrency: int,
     run_name: str,
 ) -> Dict[str, Any]:
+    if base_args.latency_mode and method == "mineru_344_2605_popo":
+        raise ValueError("MinerU-Popo latency mode is not supported until the colocated services fit the target GPU")
     if method == "mineru_344_2605_popo":
         if concurrency != 1:
             raise ValueError("Popo requires one coordinator; tune --popo-concurrency")
@@ -300,11 +364,18 @@ def run_trial(
     trial_id = f"p{base_args.pressure:03d}_{timestamp}"
     trial_output_root = base_args.output_root_base / run_name / trial_id
     trial_log_dir = base_args.log_root / trial_id
-    queue_dir = trial_log_dir / "queue"
+    internal_dir = trial_log_dir / ".internal"
+    queue_dir = internal_dir if base_args.latency_mode else trial_log_dir / "queue"
     pending_dir = queue_dir / "pending"
     done_dir = queue_dir / "done"
     worker_log_dir = trial_log_dir / "workers"
     worker_log_dir.mkdir(parents=True, exist_ok=True)
+
+    if base_args.latency_mode:
+        base_args.latency_pdf_paths = list(pdf_paths)
+        base_args.latency_record_root = internal_dir / "latency"
+        base_args.latency_timing_root = internal_dir
+        base_args.latency_record_root.mkdir(parents=True, exist_ok=True)
 
     config = method_spec.task_config
     docs_per_job = base_args.docs_per_job or int(config.docs_per_job)
@@ -328,9 +399,12 @@ def run_trial(
         if concurrency != 1:
             raise ValueError("Qianfan page_pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
-    jobs = chunk_pdf_paths(pdf_paths, docs_per_job)
-    for job_index, batch in enumerate(jobs):
-        write_pending_job_list(pending_dir, job_index, batch)
+    if base_args.latency_mode:
+        jobs = chunk_pdf_paths(pdf_paths, 1)
+    else:
+        jobs = chunk_pdf_paths(pdf_paths, docs_per_job)
+        for job_index, batch in enumerate(jobs):
+            write_pending_job_list(pending_dir, job_index, batch)
 
     trial_args = build_trial_args(base_args, trial_output_root=trial_output_root)
     monitor = GpuMonitor(base_args.gpu_id, base_args.monitor_interval_seconds)
@@ -389,6 +463,7 @@ def run_trial(
                     config=config,
                     base_args=base_args,
                     method_spec=method_spec,
+                    worker_id=worker_id,
                 )
                 proc = run_command(
                     worker_cmd,
@@ -415,6 +490,7 @@ def run_trial(
                     config=config,
                     base_args=base_args,
                     method_spec=method_spec,
+                    worker_id=worker_id,
                 )
                 if base_args.dry_run:
                     print(f"[dry-run][{method}][c={concurrency}] worker:", " ".join(worker_cmd))
@@ -474,15 +550,31 @@ def run_trial(
         worker_results = [{"worker_id": worker_id, "worker_log": str(log), "return_code": proc.poll(),
                            "status": "ok" if proc.poll() == 0 else "failed"}
                           for worker_id, log, proc in worker_procs]
-    job_statuses = collect_done_statuses(done_dir)
+    latency_records: list[dict[str, Any]] = []
+    if base_args.latency_mode:
+        try:
+            job_statuses, latency_records = load_latency_job_statuses(
+                base_args.latency_record_root, pdf_paths
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            trial_error = f"{type(exc).__name__}: {exc}"
+            job_statuses = []
+    else:
+        job_statuses = collect_done_statuses(done_dir)
     failed_jobs = [payload for payload in job_statuses if bool(payload.get("failed"))]
     failed_docs = collect_failed_docs(job_statuses)
-    unprocessed_docs = collect_unprocessed_docs(job_statuses, queue_dir)
+    unprocessed_docs = (
+        [] if base_args.latency_mode
+        else collect_unprocessed_docs(job_statuses, queue_dir)
+    )
     completed_inputs = successful_inputs(pdf_paths, job_statuses, failed_docs, unprocessed_docs)
     if model_ready_timing and not coordinator_timing and not base_args.dry_run:
         try:
-            page_counts = {Path(path): count for job in job_statuses
-                           for path, count in job["successful_input_page_counts"].items()}
+            page_counts = {
+                Path(path): count
+                for job in job_statuses
+                for path, count in job.get("successful_input_page_counts", {}).items()
+            }
             if set(page_counts) != set(completed_inputs):
                 raise ValueError("Worker success page counts do not match completed input documents")
         except (KeyError, ValueError) as exc:
@@ -509,6 +601,22 @@ def run_trial(
 
     successful_pages = sum(page_counts.values())
     successful_docs = len(completed_inputs)
+    if base_args.latency_mode and not base_args.dry_run:
+        latency_output = trial_output_root / method / "latency_summary.json"
+        latency_output.parent.mkdir(parents=True, exist_ok=True)
+        latency_payload = {
+            "method": method,
+            "measurement_mode": "latency",
+            "pressure": base_args.pressure,
+            "startup_seconds": startup_seconds if startup_seconds else None,
+            "processing_seconds": processing_seconds,
+            "total_wall_seconds": total_wall_seconds,
+            "documents": latency_records,
+        }
+        latency_output.write_text(
+            json.dumps(latency_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
     quality_summary = {}
     if method == "unlimited_ocr_sglang" and base_args.unlimited_ocr_request_mode == "joint":
         warning_docs = []
@@ -541,6 +649,7 @@ def run_trial(
     summary: Dict[str, Any] = {
         **quality_summary,
         "method": method,
+        "measurement_mode": "latency" if base_args.latency_mode else "throughput",
         "kind": method_spec.kind,
         "gpu_id": base_args.gpu_id,
         "concurrency": concurrency,
@@ -597,6 +706,10 @@ def run_trial(
         method, qianfan_request_mode=base_args.qianfan_request_mode,
         unlimited_request_mode=base_args.unlimited_ocr_request_mode,
     ).profile_id
+    if base_args.latency_mode:
+        summary["latency_summary_path"] = str(
+            trial_output_root / method / "latency_summary.json"
+        )
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(
         f"[done] method={method} concurrency={concurrency} "
@@ -608,6 +721,11 @@ def run_trial(
             and not quality_summary.get("quality_warning_doc_count")):
         shutil.rmtree(trial_output_root, ignore_errors=True)
         summary["trial_output_removed"] = True
+
+    if base_args.latency_mode and trial_status == "ok":
+        # The final latency summary is part of outputs; queue/timing transport
+        # state is not a result artifact and should not accumulate.
+        shutil.rmtree(internal_dir, ignore_errors=True)
 
     return summary
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import time
@@ -75,12 +76,21 @@ def parse_args() -> argparse.Namespace:
     add_runtime_args(parser)
     parser.add_argument("--marker-workers", type=int, default=1,
                         help="Marker shared-model document workers per GPU.")
+    parser.add_argument(
+        "--latency-mode",
+        action="store_true",
+        help="Process the input PDFs sequentially in memory; do not create queue job files.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--run-id", default=time.strftime("native_%Y%m%d_%H%M%S"))
     args = parser.parse_args()
     run_root = (TMP_ROOT / "smoke" if args.dry_run else EXPERIMENT_ROOT / "benchmark") / args.run_id
     args.output_root_base = args.output_root_base or str(run_root / "outputs")
     args.log_root = args.log_root or str(Path(args.output_root_base).parent / "logs")
+    if args.latency_mode and len([item for item in args.gpus.split(",") if item.strip()]) != 1:
+        parser.error("--latency-mode requires exactly one GPU")
+    if args.latency_mode and args.marker_workers != 1:
+        parser.error("--latency-mode requires one Marker document worker")
     return args
 
 
@@ -91,6 +101,8 @@ def run_method(
     args: argparse.Namespace,
 ) -> list[dict[str, object]]:
     pdf_paths = collect_pdf_paths(Path(args.input_root))
+    if args.latency_mode and method_id == "mineru_344_2605_popo":
+        raise ValueError("MinerU-Popo latency mode is not supported until the colocated services fit the target GPU")
     docs_per_job = config.docs_per_job
     if method_id == "pp_structurev3":
         docs_per_job = max(1, (len(pdf_paths) + len(gpus) - 1) // len(gpus))
@@ -102,11 +114,13 @@ def run_method(
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     method_log_dir = Path(args.log_root) / method_id
-    queue_dir = method_log_dir / f"queue_{timestamp}"
+    queue_dir = method_log_dir / (f".latency_{timestamp}" if args.latency_mode else f"queue_{timestamp}")
     pending_dir = queue_dir / "pending"
     done_dir = queue_dir / "done"
-    for job_index, pdf_batch in enumerate(jobs):
-        write_pending_job_list(pending_dir, job_index, pdf_batch)
+    latency_record_path = queue_dir / "latency_records.json"
+    if not args.latency_mode:
+        for job_index, pdf_batch in enumerate(jobs):
+            write_pending_job_list(pending_dir, job_index, pdf_batch)
 
     if args.dry_run:
         results: list[dict[str, object]] = []
@@ -120,6 +134,7 @@ def run_method(
                     "method": method_id,
                     "gpu_id": gpu_id,
                     "status": "dry_run",
+                    "measurement_mode": "latency" if args.latency_mode else "throughput",
                     "worker_log": str(worker_log),
                     "queue_dir": str(queue_dir),
                 }
@@ -127,6 +142,7 @@ def run_method(
         return results
 
     worker_runs: list[tuple[int, Path, subprocess.Popen[str]]] = []
+    worker_started = time.perf_counter()
     for gpu_id in gpus:
         worker_id = f"gpu{gpu_id}"
         worker_log = method_log_dir / f"{timestamp}_worker_gpu{gpu_id}.log"
@@ -134,6 +150,18 @@ def run_method(
         env_overrides = {"CUDA_VISIBLE_DEVICES": str(gpu_id)}
         if config.env_overrides:
             env_overrides.update(config.env_overrides)
+        if args.latency_mode:
+            env_overrides.update(
+                {
+                    "GDB_LATENCY_MODE": "1",
+                    "GDB_LATENCY_METHOD": method_id,
+                    "GDB_LATENCY_PDF_PATHS": json.dumps(
+                        [str(path) for path in pdf_paths], ensure_ascii=False
+                    ),
+                    "GDB_LATENCY_RECORD_PATH": str(latency_record_path),
+                    "GDB_LATENCY_TIMING_ROOT": str(queue_dir),
+                }
+            )
         proc = run_command(
             worker_cmd,
             worker_log,
@@ -145,6 +173,78 @@ def run_method(
     results: list[dict[str, object]] = []
     for gpu_id, worker_log, proc in worker_runs:
         return_code = wait_for_coordinator(proc) if method_id == "mineru_344_2605_popo" else proc.wait()
+        if args.latency_mode:
+            records: list[dict[str, object]] = []
+            record_error = None
+            if not latency_record_path.is_file():
+                record_error = "latency record file missing"
+            else:
+                try:
+                    payload = json.loads(latency_record_path.read_text(encoding="utf-8"))
+                    if not isinstance(payload, list):
+                        raise ValueError("Latency record must be a JSON list")
+                    records = payload
+                except (OSError, ValueError, json.JSONDecodeError) as exc:
+                    record_error = f"{type(exc).__name__}: {exc}"
+            failed_docs = []
+            for item in records:
+                if item.get("status") == "ok":
+                    continue
+                failure = item.get("failure")
+                failure_reason = failure.get("reason") if isinstance(failure, dict) else None
+                failed_docs.append(
+                    {
+                        "pdf_path": str(item.get("pdf_path", "")),
+                        "reason": str(
+                            item.get("error")
+                            or failure_reason
+                            or item.get("status")
+                            or "latency document failed"
+                        ),
+                    }
+                )
+            if record_error:
+                failed_docs.append({"pdf_path": "", "reason": record_error})
+            processing_seconds = round(
+                sum(float(item.get("processing_seconds", 0.0)) for item in records), 6
+            )
+            latency_output = Path(args.output_root_base) / method_id / "latency_summary.json"
+            latency_output.parent.mkdir(parents=True, exist_ok=True)
+            latency_output.write_text(
+                json.dumps(
+                    {
+                        "method": method_id,
+                        "measurement_mode": "latency",
+                        "gpu_id": gpu_id,
+                        "document_count": len(pdf_paths),
+                        "recorded_document_count": len(records),
+                        "startup_seconds": None,
+                        "total_wall_seconds": round(time.perf_counter() - worker_started, 6),
+                        "processing_seconds": processing_seconds,
+                        "documents": records,
+                        "failed_docs": failed_docs,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            result = {
+                "method": method_id,
+                "gpu_id": gpu_id,
+                "measurement_mode": "latency",
+                "status": "ok" if return_code == 0 and not failed_docs else "failed",
+                "return_code": return_code,
+                "worker_log": str(worker_log),
+                "latency_summary": str(latency_output),
+                "documents_expected": len(pdf_paths),
+                "documents_recorded": len(records),
+                "processing_seconds": processing_seconds,
+                "total_wall_seconds": round(time.perf_counter() - worker_started, 6),
+                "failed_docs": failed_docs,
+            }
+            results.append(result)
+            continue
         jobs_completed = 0
         jobs_failed = 0
         suffix = ".marker*" if method_id == "marker" else ".popo*" if method_id == "mineru_344_2605_popo" else ""
@@ -166,6 +266,10 @@ def run_method(
                 "queue_dir": str(queue_dir),
             }
         )
+
+    if args.latency_mode:
+        shutil.rmtree(queue_dir, ignore_errors=True)
+        return sorted(results, key=lambda item: int(item["gpu_id"]))
 
     statuses = collect_done_statuses(done_dir)
     for item in results:
@@ -238,7 +342,7 @@ def main() -> None:
             {
                 "method": method_id,
                 "execution_profile": asdict(profile),
-                "mode": "method_serial_gpu_parallel_native",
+                "mode": "latency_serial_native" if args.latency_mode else "method_serial_gpu_parallel_native",
                 "workers": method_results,
                 "status": (
                     "ok"
