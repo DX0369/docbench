@@ -1,0 +1,543 @@
+{
+  "schema_version": 4,
+  "audit_date": "2026-07-20",
+  "note": "Repositories pin runtime checkout revisions once. Variants reference source_repository_id; historical_source_revision and source_binding distinguish historical provenance from compatibility source. Local patch requirements remain recorded in notes.",
+  "repositories": [
+    {
+      "id": "mineru_popo",
+      "path": "third_party/methods/MinerU-Popo",
+      "url": "https://github.com/opendatalab/MinerU-Popo.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "97d560172361e772b3d079ce9eac35796b998782",
+      "notes": "Requires local same-page patch and community PR12/PR15; see src/methods/mineru_popo/patches/README.md. HEAD lock does not encode these patches."
+    },
+    {
+      "id": "deepseek_ocr2",
+      "path": "third_party/methods/deepseek_ocr2",
+      "url": "https://github.com/deepseek-ai/DeepSeek-OCR-2.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "2f3699ebbb96fa8af32212e8c170f2cc28730fad",
+      "archived_revision": "2f3699ebbb96fa8af32212e8c170f2cc28730fad"
+    },
+    {
+      "id": "hunyuanocr",
+      "path": "third_party/methods/hunyuanocr",
+      "url": "https://github.com/Tencent-Hunyuan/HunyuanOCR.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "a1ce1099db98edceb153710536af23edf4391cf0",
+      "archived_revision": "ce4a967"
+    },
+    {
+      "id": "qianfan_vl",
+      "path": "third_party/methods/qianfan_vl",
+      "url": "https://github.com/baidubce/Qianfan-VL.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "b2c7cdf15e4a0c77270ae025cc42a0cc94524a98",
+      "archived_revision": "b2c7cdf15e4a0c77270ae025cc42a0cc94524a98"
+    },
+    {
+      "id": "paddleocr",
+      "path": "third_party/methods/paddleocr",
+      "url": "https://github.com/PaddlePaddle/PaddleOCR.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "211989f046cc1878460f9e65574690c00a127a1a",
+      "archived_revision": "56165f7da6"
+    },
+    {
+      "id": "marker",
+      "path": "third_party/methods/marker",
+      "url": "https://github.com/jerzydziewierz/marker_ocr.git",
+      "ref": "master",
+      "update_ref": "master",
+      "revision": "ab1d11516359f501ed9b3d96de2c1c0dce7038c7",
+      "archived_revision": "ab1d11516359f501ed9b3d96de2c1c0dce7038c7"
+    },
+    {
+      "id": "glmocr",
+      "path": "third_party/methods/glmocr",
+      "url": "https://github.com/zai-org/GLM-OCR.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "cef4d0ea120d1741f5cefe8985eee45f6c8eff1d",
+      "archived_revision": "b069c6f",
+      "notes": "Requires src/methods/glmocr/patches/failure_propagation.patch. Pinned HEAD plus project failure-policy patch, not pristine upstream. See environment recipe."
+    },
+    {
+      "id": "mineru",
+      "path": "third_party/methods/mineru",
+      "url": "https://github.com/opendatalab/MinerU.git",
+      "ref": "refs/tags/mineru-3.4.4-released",
+      "update_ref": "master",
+      "revision": "0dfc9460cd9ab693b9af60ae3fbffd7bc111b062",
+      "archived_revision": "ff2caf3a",
+      "release": "3.4.4"
+    },
+    {
+      "id": "mineru_303",
+      "path": "third_party/methods/mineru_303",
+      "url": "https://github.com/opendatalab/MinerU.git",
+      "ref": "ff2caf3a842a54b3d31979a2945003cf67858199",
+      "update_ref": "refs/tags/mineru-3.0.3-released",
+      "revision": "ff2caf3a842a54b3d31979a2945003cf67858199",
+      "release_tag_revision": "be675a5a97edd569761086460193e266a2479f07",
+      "release": "3.0.3",
+      "notes": "Requires src/methods/mineru/patches/pdfium_image_bounds.patch for pypdfium2 5.10.1. Pinned HEAD plus a one-line image-bounds API compatibility patch; classification thresholds and inference settings are unchanged. See gdb_mineru_303 environment recipe."
+    },
+    {
+      "id": "monkeyocr",
+      "path": "third_party/methods/monkeyocr",
+      "url": "https://github.com/Yuliang-Liu/MonkeyOCR.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "70f6e2c5583a563796d7e0ec8a319d5bcfb86219",
+      "archived_revision": "c10b932",
+      "notes": "Apply src/methods/monkeyocr/patches/failure_propagation.patch (async only), region_concurrency.patch (official semaphore, default 64), then tiny_image.patch (official HF fetch_image only for regions below 28px after max_size=1600; strict async image loading, no dummy fallback). Tiny-region pixels change; original boxes and generation settings do not. Retired API/Transformers/queue patches were removed; current multifile feed is in the project adapter. Pinned HEAD plus documented project patches, not pristine upstream. See environment recipe."
+    },
+    {
+      "id": "youtu",
+      "path": "third_party/methods/youtu",
+      "url": "https://github.com/TencentCloudADP/youtu-parsing.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "3b7c1131219c58bf0e4254ae01dc35da1a881707",
+      "archived_revision": "0ada93d",
+      "notes": "Requires src/methods/youtu/patches/failure_propagation.patch. Pinned HEAD plus project failure-policy patch, not pristine upstream. See environment recipe."
+    },
+    {
+      "id": "unlimited_ocr",
+      "path": "third_party/methods/unlimited_ocr",
+      "url": "https://github.com/baidu/Unlimited-OCR.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "528fca4e2161e23231d05666a6d35155dcb1957e",
+      "archived_revision": "528fca4e2161e23231d05666a6d35155dcb1957e"
+    }
+  ],
+  "variants": [
+    {
+      "method_id": "mineru_344_2605_popo",
+      "family_id": "mineru_popo",
+      "display_name": "MinerU 3.4.4 / 2605 + Popo",
+      "official_checkpoint": "DreamEternal/MinerU-Popo",
+      "model_path": "mineru/MinerU-Popo",
+      "additional_model_paths": [
+        "mineru/MinerU2.5-Pro-2605-1.2B",
+        "mineru/PDF-Extract-Kit-1.0"
+      ],
+      "model_required": true,
+      "source_repository_id": "mineru_popo",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.mineru_popo.worker",
+      "conda_environments": [
+        "gdb_mineru_popo",
+        "gdb_mineru"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "shared_vllm_smoke_verified_rtx3090_20doc_p124_partial",
+      "notes": "Document-only composition based on mineru_344_2605. Shared official MinerU /tasks + Popo vLLM, P CPU clients, ready/start/done timing; single-GPU, pressure and full-workflow entries connected. Popo HEAD plus same_page/PR12/PR15/failure_propagation patches, not pristine upstream. Services reuse unchanged gdb_mineru (vLLM0.11.2/Torch2.9.0+cu128/Transformers4.57.6); CPU clients use gdb_mineru_popo. GPU4: two documents/five pages passed with MinerU0.20/Popo0.68, context16384, BF16 and unchanged sampling. Fixed20/146-page P1/P2/P4 trials processed all inputs but failed acceptance: 16/16/17 successful documents, 105/105/112 successful pages. Shared failures: upstream tree omits unanchored table-only blocks, and two Popo prompts exceed context16384. P1/P2 additionally hit MinerU UniMERNet MFR OOM; not observed in P4, not proven fixed. No stable/best profile saved. Explicit service interpreter/context/memory required; standalone MinerU default0.55 unchanged. Official contd/image empty relation strings accepted only on normal stop; null/truncation/other-task empty responses fail. Old cold/TF code remains recoverable at c533601."
+    },
+    {
+      "method_id": "hunyuanocr_10",
+      "family_id": "hunyuanocr",
+      "display_name": "HunyuanOCR-1.0",
+      "official_checkpoint": "tencent/HunyuanOCR::v1.0/*",
+      "model_path": "HunyuanOCR",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "hunyuanocr",
+      "source_binding": "compatibility_source",
+      "historical_source_revision": "ce4a9673e0a450c22e3ee434a0cf45b532f970f8",
+      "adapter_module": "methods.hunyuanocr.commands",
+      "conda_environments": [
+        "gdb_hunyuan"
+      ],
+      "benchmark_status": "active",
+      "role": "historical_baseline",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "The checkpoint lives under v1.0/ in the same official model repository used by 1.5. Runtime inference uses the current compatibility checkout and model-bundled remote code; ce4a967 is retained only as the historical source revision."
+    },
+    {
+      "method_id": "hunyuanocr_15",
+      "family_id": "hunyuanocr",
+      "display_name": "HunyuanOCR-1.5",
+      "official_checkpoint": "tencent/HunyuanOCR",
+      "model_path": "HunyuanOCR-1.5",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "hunyuanocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.hunyuanocr.commands",
+      "conda_environments": [
+        "gdb_hunyuan"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_ar_single_page_smoke_verified",
+      "notes": "The active profile is ordinary AR inference. DFlash is exposed through the separate hunyuanocr_15_dflash execution variant."
+    },
+    {
+      "method_id": "hunyuanocr_15_dflash",
+      "family_id": "hunyuanocr",
+      "display_name": "HunyuanOCR-1.5 DFlash",
+      "official_checkpoint": "tencent/HunyuanOCR + dflash/model.safetensors",
+      "model_path": "HunyuanOCR-1.5",
+      "additional_model_paths": [
+        "HunyuanOCR-1.5/dflash"
+      ],
+      "model_required": true,
+      "source_repository_id": "hunyuanocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.hunyuanocr.commands",
+      "conda_environments": [
+        "gdb_hunyuan",
+        "gdb_hunyuan_dflash"
+      ],
+      "benchmark_status": "active",
+      "role": "execution_variant",
+      "validation_status": "rtx3090_dflash_single_page_smoke_verified",
+      "notes": "Lossless speculative-decoding execution variant of HunyuanOCR-1.5. It shares the AR page adapter and output normalization, but uses the independently pinned vLLM dev869 DFlash service environment. RTX 3090 smoke uses a hardware-adapted 65536 context instead of the official 131072 context."
+    },
+    {
+      "method_id": "qianfan_ocr",
+      "family_id": "qianfan_ocr",
+      "display_name": "Qianfan-OCR",
+      "official_checkpoint": "baidu-qianfan/Qianfan-OCR",
+      "model_path": "Qianfan-OCR",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "qianfan_vl",
+      "source_binding": "reference_checkout",
+      "adapter_module": "methods.qianfan_ocr.commands",
+      "conda_environments": [
+        "gdb_qianfan"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Inference uses model-bundled remote code; the locked Qianfan-VL checkout is reference-only. Both joint (default, whole-document input) and page_pool (independent pages with page-level outputs) are supported, sharing the pinned official long prompt. Historical legacy_page is retired; recover it from code Git f578eeda. Parameters and validation boundaries: docs/THROUGHPUT_TUNING_PROTOCOL.md and docs/RUN_COMMANDS.md."
+    },
+    {
+      "method_id": "qianfan_ocr_think",
+      "family_id": "qianfan_ocr",
+      "display_name": "Qianfan-OCR-think",
+      "official_checkpoint": "baidu-qianfan/Qianfan-OCR",
+      "model_path": "Qianfan-OCR",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "qianfan_vl",
+      "source_binding": "reference_checkout",
+      "adapter_module": "methods.qianfan_ocr.commands",
+      "conda_environments": [
+        "gdb_qianfan"
+      ],
+      "benchmark_status": "active",
+      "role": "execution_variant",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Layout-as-Thought shares the checkpoint, environment and joint/page_pool implementations with ordinary Qianfan. Thinking is triggered once by the chat template; raw replies are retained and leading thinking is separated from final Markdown. Historical legacy_page is retired; recover it from code Git f578eeda. Validation boundaries, including multi-image omissions, are documented in docs/THROUGHPUT_TUNING_PROTOCOL.md."
+    },
+    {
+      "method_id": "deepseek_ocr2",
+      "family_id": "deepseek_ocr",
+      "display_name": "DeepSeek-OCR-2",
+      "official_checkpoint": "deepseek-ai/DeepSeek-OCR-2",
+      "model_path": "DeepSeek-OCR-2",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "deepseek_ocr2",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.deepseek_ocr2.commands",
+      "conda_environments": [
+        "gdb_deepseek_ocr2"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Only deepseek_ocr2_page_pool is runnable: one resident client, spawn CPU preprocessing and one AsyncLLM service. P1/P2 each completed 20 documents/146 pages on different RTX 3090 GPUs; P4 port-conflict failure is not valid capacity evidence. CPU-only cleanup regression does not replace a new GPU smoke. Known Chinese transcription/format omissions remain; tracked bytecode artifacts are not source changes."
+    },
+    {
+      "method_id": "paddleocr_vl_15",
+      "family_id": "paddleocr_vl",
+      "display_name": "PaddleOCR-VL-1.5",
+      "official_checkpoint": "PaddlePaddle/PaddleOCR-VL-1.5",
+      "model_path": "PaddleOCR-VL-1.5",
+      "additional_model_paths": [
+        "paddlex/official_models"
+      ],
+      "model_required": true,
+      "source_repository_id": "paddleocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.paddleocr_vl.commands",
+      "conda_environments": [
+        "gdb_paddle",
+        "gdb_paddle_vllm"
+      ],
+      "benchmark_status": "active",
+      "role": "current_baseline",
+      "validation_status": "rtx3090_short_multipage_smoke_verified",
+      "notes": "Shared official PDF pipeline with pipeline_version v1.5 and its own checkpoint. Current 200 DPI/4096 generation/16384 context, single-pipeline queue route passed a bounded document check; pressure curve and full benchmark are not verified. See docs/RUN_COMMANDS.md and docs/THROUGHPUT_TUNING_PROTOCOL.md."
+    },
+    {
+      "method_id": "paddleocr_vl_16",
+      "family_id": "paddleocr_vl",
+      "display_name": "PaddleOCR-VL-1.6",
+      "official_checkpoint": "PaddlePaddle/PaddleOCR-VL-1.6",
+      "model_path": "PaddleOCR-VL-1.6",
+      "additional_model_paths": [
+        "paddlex/official_models"
+      ],
+      "model_required": true,
+      "source_repository_id": "paddleocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.paddleocr_vl.commands",
+      "conda_environments": [
+        "gdb_paddle",
+        "gdb_paddle_vllm"
+      ],
+      "benchmark_status": "active",
+      "role": "upstream_candidate",
+      "validation_status": "rtx3090_short_multipage_smoke_verified",
+      "notes": "Shared official PDF pipeline with pipeline_version v1.6 and its own checkpoint. Current single-pipeline queue route passed 4-document/9-page smoke and bounded P=1/2/4/8 runs. Shared repeated-paragraph content issue is unresolved; no full-dataset optimum or final pressure selected. See THROUGHPUT_TUNING_PROTOCOL.md."
+    },
+    {
+      "method_id": "glmocr",
+      "family_id": "glmocr",
+      "display_name": "GLM-OCR",
+      "official_checkpoint": "ZhipuAI/GLM-OCR",
+      "model_path": "GLM-OCR",
+      "additional_model_paths": [
+        "PP-DocLayoutV3_safetensors"
+      ],
+      "model_required": true,
+      "source_repository_id": "glmocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.glmocr.commands",
+      "conda_environments": [
+        "gdb_glmocr"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "The benchmark runs the official two-stage GLM-OCR plus PP-DocLayoutV3 pipeline."
+    },
+    {
+      "method_id": "monkeyocr_pro_3b",
+      "family_id": "monkeyocr",
+      "display_name": "MonkeyOCR-pro-3B",
+      "official_checkpoint": "echo840/MonkeyOCR-pro-3B",
+      "model_path": "MonkeyOCR-pro-3B",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "monkeyocr",
+      "source_binding": "compatibility_source",
+      "historical_source_revision": "c10b932",
+      "adapter_module": "methods.monkeyocr.versions.pro_3b",
+      "conda_environments": [
+        "gdb_monkey"
+      ],
+      "benchmark_status": "active",
+      "role": "historical_checkpoint",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Historical checkpoint; shared compatibility source, not exact A800 runner c10b932. Async-only single runtime with persistent loop. GPU2 bounded smoke and GPU7 20 PDFs/146 pages at P=1/2/4 passed execution/output checks; content errors and cross-P differences remain. P4 fastest tested, not a selected formal profile or global optimum. Cleanup verified CPU/dry-run only; see smoke and throughput docs."
+    },
+    {
+      "method_id": "monkeyocr_pro_1_2b",
+      "family_id": "monkeyocr",
+      "display_name": "MonkeyOCR-pro-1.2B",
+      "official_checkpoint": "echo840/MonkeyOCR-pro-1.2B",
+      "model_path": "MonkeyOCR-pro-1.2B",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "monkeyocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.monkeyocr.versions.pro_1_2b",
+      "conda_environments": [
+        "gdb_monkey"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Shares pinned source and gdb_monkey with Pro-3B; async-only single runtime with persistent loop. GPU2 bounded smoke and GPU7 20 PDFs/146 pages at P=1/2/4 passed execution/output checks; content errors and cross-P differences remain. P4 fastest tested, default P64 unchanged. Cleanup verified CPU/dry-run only; see smoke and throughput docs."
+    },
+    {
+      "method_id": "mineru_303_2509",
+      "family_id": "mineru",
+      "display_name": "MinerU 3.0.3 + MinerU2.5-2509-1.2B",
+      "official_checkpoint": "OpenDataLab/MinerU2.5-2509-1.2B",
+      "model_path": "mineru/MinerU2.5-2509-1.2B",
+      "additional_model_paths": [
+        "mineru/PDF-Extract-Kit-1.0"
+      ],
+      "model_required": true,
+      "source_repository_id": "mineru_303",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.mineru.commands",
+      "conda_environments": [
+        "gdb_mineru_303"
+      ],
+      "benchmark_status": "active",
+      "role": "historical_version",
+      "validation_status": "rtx3090_api_multi_document_structure_verified_content_differences",
+      "notes": "Managed hybrid API only; direct/router/other backends retired (recover at 69d689a). Source ff2caf3a includes the upstream 3.0.3 version fix; apply pdfium_image_bounds.patch. GPU6: 20 documents/146 pages at P=1/2/4 each completed with structurally valid unified outputs; P4 fastest measured, but native content differs and no best profile is selected. API ready/start/done, official compilation, VLM memory 0.55. API-only cleanup has CPU/dry-run coverage, not a new GPU measurement."
+    },
+    {
+      "method_id": "mineru_344_2605",
+      "family_id": "mineru",
+      "display_name": "MinerU 3.4.4 + MinerU2.5-Pro-2605-1.2B",
+      "official_checkpoint": "OpenDataLab/MinerU2.5-Pro-2605-1.2B",
+      "model_path": "mineru/MinerU2.5-Pro-2605-1.2B",
+      "additional_model_paths": [
+        "mineru/PDF-Extract-Kit-1.0"
+      ],
+      "model_required": true,
+      "source_repository_id": "mineru",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.mineru.commands",
+      "conda_environments": [
+        "gdb_mineru"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_api_multi_document_structure_verified_content_differences",
+      "notes": "Managed hybrid API only; direct/router/other backends retired (recover at 69d689a). Exact mineru-3.4.4-released checkout reports runtime 3.4.3: /ready distinguishes verified release from runtime and checks pinned source identity. GPU6: 20 documents/146 pages at P=1/2/4 each completed; unified output structure passes but native missing/misclassified blocks remain. P4 fastest measured, not content-equivalent optimum; no best profile selected. API-only cleanup has CPU/dry-run coverage, not a new GPU measurement."
+    },
+    {
+      "method_id": "youtu",
+      "family_id": "youtu",
+      "display_name": "Youtu-Parsing",
+      "official_checkpoint": "tencent/Youtu-Parsing",
+      "model_path": "Youtu-Parsing",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "youtu",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.youtu.commands",
+      "conda_environments": [
+        "gdb_youtu"
+      ],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_single_page_smoke_verified",
+      "notes": "Official HF native parser only: one resident model, P groups text-region queries; default P=5, angle correction disabled. Keep the locked source and failure-propagation patch. Bounded 3-document/8-page P1/2/4 and historical P5/8 checks passed. Native-only cleanup and removal of 13 API-only packages passed a fresh GPU7 default-P5 regression on 2026-10-03; no full-benchmark or optimum-P claim."
+    },
+    {
+      "method_id": "marker",
+      "family_id": "marker",
+      "display_name": "Marker",
+      "official_checkpoint": "Surya 0.14.7 managed model bundle",
+      "model_path": "marker-surya",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "marker",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.marker.worker",
+      "conda_environments": [
+        "gdb_marker"
+      ],
+      "benchmark_status": "active",
+      "role": "current_baseline",
+      "validation_status": "rtx3090_shared_workers_p1_p2_p4_subset_verified",
+      "notes": "Only marker_shared_workers is registered: P shared-model document workers, native component batches, cuDNN enabled, benchmark 200/200 DPI. Invocation and output structure are covered by the bounded run protocol; P is not claimed globally optimal. Known reading-order/math/figure limitations and unsaved image assets remain explicitly accepted without project-side content correction; see docs/RUN_COMMANDS.md and docs/THROUGHPUT_TUNING_PROTOCOL.md. Environment/source identity is documented in environments/gdb_marker.md."
+    },
+    {
+      "method_id": "pp_structurev3",
+      "family_id": "paddleocr",
+      "display_name": "PP-StructureV3",
+      "official_checkpoint": "PaddleX PP-StructureV3 managed model bundle",
+      "model_path": "paddlex/official_models",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "paddleocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.pp_structurev3.worker",
+      "conda_environments": [
+        "gdb_paddle"
+      ],
+      "benchmark_status": "active",
+      "role": "current_baseline",
+      "validation_status": "batch_scale_gpu_verified_content_issues",
+      "notes": "Only pp_structurev3_page_prefetch: one resident pipeline, bounded CPU page prefetch, benchmark 200 DPI, P scales five native batches; table/detection unchanged. Ready includes table auxiliary preload. Known native content omissions remain; default P1, no selected optimum. See environments/gdb_paddle.md, docs/RUN_COMMANDS.md and docs/THROUGHPUT_TUNING_PROTOCOL.md; retired interfaces recoverable from Git 3357a91."
+    },
+    {
+      "method_id": "unlimited_ocr_sglang",
+      "family_id": "unlimited_ocr",
+      "display_name": "Unlimited-OCR SGLang",
+      "official_checkpoint": "PaddlePaddle/Unlimited-OCR",
+      "model_path": "Unlimited-OCR",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "unlimited_ocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.unlimited_ocr.client",
+      "conda_environments": [
+        "gdb_unlimited_ocr_sglang"
+      ],
+      "benchmark_status": "active",
+      "role": "recommended_service_backend",
+      "validation_status": "rtx3090_p124_execution_verified_quality_warnings",
+      "notes": "Only active route: official custom SGLang + SM86 patches, whole-PDF base requests at benchmark 200 DPI; persistent clients share one service. GPU4 P1/P2/P4 each completed 20 documents/146 input pages without execution failures; P4 selected for this subset, not an official or universal optimum. Truncation/pagination warnings are recorded separately; outputs differ across pressures. Current protocol and results: THROUGHPUT_TUNING_PROTOCOL.md. No standalone client CLI. Old HF adapter/recipe recoverable from Git 5c2b4a5; historical environment/model/locks retained."
+    },
+    {
+      "method_id": "qwen35_4b",
+      "family_id": "generic_vlm",
+      "display_name": "Qwen3.5-4B",
+      "official_checkpoint": "Qwen/Qwen3.5-4B",
+      "model_path": "Qwen3.5-4B",
+      "additional_model_paths": [],
+      "model_required": false,
+      "source_repository_id": null,
+      "source_binding": "model_only",
+      "adapter_module": "methods.generic_vlm.commands",
+      "conda_environments": [
+        "gdb_glmocr"
+      ],
+      "benchmark_status": "candidate",
+      "role": "generic_vlm_control",
+      "validation_status": "model_missing_not_smoked",
+      "notes": "The generic adapter is retained as an experimental control asset, but this method is not registered in the formal scheduler and the expected local model directory is absent."
+    },
+    {
+      "method_id": "qwen35_4b_think",
+      "family_id": "generic_vlm",
+      "display_name": "Qwen3.5-4B-think",
+      "official_checkpoint": "Qwen/Qwen3.5-4B",
+      "model_path": "Qwen3.5-4B",
+      "additional_model_paths": [],
+      "model_required": false,
+      "source_repository_id": null,
+      "source_binding": "model_only",
+      "adapter_module": "methods.generic_vlm.commands",
+      "conda_environments": [
+        "gdb_glmocr"
+      ],
+      "benchmark_status": "candidate",
+      "role": "generic_vlm_control",
+      "validation_status": "model_missing_not_smoked",
+      "notes": "This is an experimental decoding mode of the same missing Qwen checkpoint and is not registered in the formal scheduler."
+    },
+    {
+      "method_id": "gemma3_4b",
+      "family_id": "generic_vlm",
+      "display_name": "Gemma-3-4B-it",
+      "official_checkpoint": "google/gemma-3-4b-it",
+      "model_path": "gemma-3-4b-it",
+      "additional_model_paths": [],
+      "model_required": false,
+      "source_repository_id": null,
+      "source_binding": "model_only",
+      "adapter_module": "methods.generic_vlm.commands",
+      "conda_environments": [
+        "gdb_glmocr"
+      ],
+      "benchmark_status": "candidate",
+      "role": "generic_vlm_control",
+      "validation_status": "model_missing_not_smoked",
+      "notes": "The generic adapter is retained as an experimental control asset, but this method is not registered in the formal scheduler and the expected local model directory is absent."
+    }
+  ]
+}

@@ -1,0 +1,173 @@
+# GlobalDocBench 运行命令
+
+本文档只维护迁移后可直接复制的运行命令。环境安装见
+[`environments/`](environments/README.md)，模型下载见 [`MODELS.md`](MODELS.md)，
+吞吐口径和失败规则见 [`THROUGHPUT_TUNING_PROTOCOL.md`](THROUGHPUT_TUNING_PROTOCOL.md)。
+
+## 公共变量
+
+从 `code/` 目录执行。启动 Python 只负责读取配置和启动子进程；各方法 worker
+会按 `config/methods.json` 和 `execution/tasks.py` 选择自己的 Conda 环境。
+
+```bash
+export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export CODE="$GDB_ROOT/code"
+export INPUTS="$CODE/config/throughput_manifests/rtx3090_20.json"
+export GPU=6                         # 运行前由用户确认空闲
+export RUN_ID="throughput_$(date +%Y%m%d_%H%M%S)"
+export RUN_ROOT="$GDB_ROOT/experiments/throughput/$RUN_ID"
+export PY=/data/wangsq/software/miniconda/bin/python
+
+mkdir -p "$RUN_ROOT/outputs" "$RUN_ROOT/logs"
+cd "$CODE"
+```
+
+不要复制 PDF；清单只引用 `data/pdf_tree` 中的原始文件。每次运行必须使用新的
+`RUN_ID`，不要覆盖既有输出。
+
+## 固定 P：所有正式吞吐方法
+
+```bash
+run_fixed() {
+    local method="$1"
+    local pressure="$2"
+    shift 2
+    "$PY" src/benchmark/run_single_gpu.py \
+        --method "$method" \
+        --gpu-id "$GPU" \
+        --pressure "$pressure" \
+        --pdf-list-file "$INPUTS" \
+        --run-name "${RUN_ID}_${method}_p${pressure}" \
+        --output-root-base "$RUN_ROOT/outputs" \
+        --log-root "$RUN_ROOT/logs/${method}_p${pressure}" \
+        "$@"
+}
+```
+
+示例：
+
+```bash
+run_fixed deepseek_ocr2 1
+run_fixed pp_structurev3 1
+run_fixed monkeyocr_pro_3b 4
+```
+
+当前正式 method ID 和 P 的实际含义如下：
+
+| method ID | execution route | P 控制的参数 |
+| --- | --- | --- |
+| `hunyuanocr_10` | vLLM AR page pool | 页面在途数 |
+| `hunyuanocr_15` | vLLM AR page pool | 页面在途数 |
+| `hunyuanocr_15_dflash` | vLLM DFlash page pool | 页面在途数 |
+| `deepseek_ocr2` | resident page pool | 页面在途数 |
+| `qianfan_ocr` | vLLM joint 或 page pool | 文档客户端数或页面在途数 |
+| `qianfan_ocr_think` | vLLM joint 或 page pool | 文档客户端数或页面在途数 |
+| `unlimited_ocr_sglang` | SGLang joint 或 page pool | 文档客户端数或页面在途数 |
+| `monkeyocr_pro_3b` | vLLM async multifile | 文档内区域在途数 |
+| `monkeyocr_pro_1_2b` | vLLM async multifile | 文档内区域在途数 |
+| `paddleocr_vl_15` | 官方多 PDF queue pipeline | 区域识别请求并发 |
+| `paddleocr_vl_16` | 官方多 PDF queue pipeline | 区域识别请求并发 |
+| `glmocr` | 单 pipeline 区域 worker | 区域识别 worker 数 |
+| `mineru_303_2509` | MinerU 3.0.3 API | API 客户端/任务上限 |
+| `mineru_344_2605` | MinerU 3.4.x API | API 客户端/任务上限 |
+| `pp_structurev3` | 单 pipeline page prefetch | 原生 batch 缩放 |
+| `marker` | shared model workers | 文档 worker 数 |
+| `youtu` | native resident parser | query batch |
+
+Qianfan 和 Unlimited 的 page pool 路线必须显式选择，不能复用 joint 的 profile：
+
+```bash
+run_fixed qianfan_ocr 4 --qianfan-request-mode page_pool
+run_fixed qianfan_ocr_think 4 --qianfan-request-mode page_pool
+run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
+```
+
+默认路线是 `joint`。如果已经保存选定 profile，固定运行改用：
+
+```bash
+"$PY" src/benchmark/run_single_gpu.py \
+    --method <METHOD_ID> \
+    --gpu-id "$GPU" \
+    --profile-file "$CODE/config/throughput_profiles/rtx3090.json" \
+    --execution-profile <EXACT_PROFILE_ID> \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_<METHOD_ID>" \
+    --output-root-base "$RUN_ROOT/outputs" \
+    --log-root "$RUN_ROOT/logs/<METHOD_ID>"
+```
+
+## 压力搜索
+
+调参只使用固定 20 文档清单；不在搜索入口复制 PDF：
+
+```bash
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods <METHOD_ID> \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+Qianfan 和 Unlimited 的 `page_pool` 是独立路线，搜索时必须显式选择，不能把
+`joint` 的搜索结果当作 `page_pool` 配置：
+
+```bash
+# Qianfan page_pool
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods qianfan_ocr \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --qianfan-request-mode page_pool \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_qianfan_page_pool_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+
+# Unlimited-OCR page_pool
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods unlimited_ocr_sglang \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --unlimited-ocr-request-mode page_pool \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_unlimited_page_pool_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+先只检查命令映射时加 `--dry-run`；只有真实运行并确认成功的配置才保存 profile。
+失败档必须保留在该 run 的日志中，不能由前一个成功档替代。
+
+## MinerU-Popo（不参与当前吞吐定版）
+
+Popo 仍保留独立 native 组合入口，不能使用上述 `run_fixed`：
+
+```bash
+"$PY" src/benchmark/run_native_batch.py \
+    --methods mineru_344_2605_popo \
+    --gpus "$GPU" \
+    --popo-vllm-python /data/wangsq/software/miniconda/envs/gdb_mineru/bin/python \
+    --popo-gpu-memory-utilization 0.68 \
+    --mineru-vllm-gpu-memory-utilization 0.20 \
+    --popo-max-model-len 32768 \
+    --run-id "${RUN_ID}_popo" \
+    --input-root "$GDB_ROOT/data/pdf_tree" \
+    --output-root-base "$GDB_ROOT/tmp/smoke/${RUN_ID}_popo/outputs" \
+    --log-root "$GDB_ROOT/tmp/smoke/${RUN_ID}_popo/logs"
+```
+
+## 迁移后最小核对
+
+```bash
+"$PY" src/validation/check_method_versions.py \
+    --json-report "$GDB_ROOT/tmp/migration/method_versions.json"
+"$PY" src/validation/check_smoke_readiness.py \
+    --json-report "$GDB_ROOT/tmp/migration/smoke_readiness.json"
+PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 "$PY" -m compileall -q src
+```
+
+之后选择一个明确的 method ID，以 `run_fixed <METHOD_ID> 1` 做单卡 smoke，
+再用 `validate_outputs.py` 检查该次输出。历史 `test_*.py` 不再作为迁移步骤。

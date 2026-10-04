@@ -1,0 +1,94 @@
+diff --git a/glmocr/pipeline/_state.py b/glmocr/pipeline/_state.py
+index dcc3154..6ba6e48 100644
+--- a/glmocr/pipeline/_state.py
++++ b/glmocr/pipeline/_state.py
+@@ -214,4 +214,4 @@ class PipelineState:
+                     "; ".join(
+                         f"{e['source']}: {e['exception']}" for e in self._exceptions
+                     )
+-                )
++                ) from self._exceptions[0]["exception"]
+diff --git a/glmocr/pipeline/_workers.py b/glmocr/pipeline/_workers.py
+index 3eaf846..4d38c52 100644
+--- a/glmocr/pipeline/_workers.py
++++ b/glmocr/pipeline/_workers.py
+@@ -272,13 +272,13 @@ def _flush_layout_batch(
+             state.layout_vis_images.update(vis_images)
+     except Exception as e:
+         logger.warning(
+-            "Layout detection failed for pages %s, skipping batch: %s",
++            "Layout detection failed for pages %s, aborting document: %s",
+             batch_page_indices,
+             e,
+         )
+-        for page_idx in batch_page_indices:
+-            state.layout_results_dict[page_idx] = []
+-        return
++        e.gdb_stage = "layout"
++        e.gdb_page_numbers = [index + 1 for index in batch_page_indices]
++        raise
+ 
+     for page_idx, image, layout_result in zip(
+         batch_page_indices, batch_images, layout_results
+@@ -290,14 +290,14 @@ def _flush_layout_batch(
+                 cropped = crop_image_region(image, region["bbox_2d"], polygon)
+             except Exception as e:
+                 logger.warning(
+-                    "Failed to crop region on page %d (bbox=%s), skipping: %s",
++                    "Failed to crop region on page %d (bbox=%s), aborting document: %s",
+                     page_idx,
+                     region.get("bbox_2d"),
+                     e,
+                 )
+-                region["content"] = ""
+-                state.add_recognition_result(page_idx, region)
+-                continue
++                e.gdb_stage = "crop"
++                e.gdb_page_number = page_idx + 1
++                raise
+             if not state.safe_put(
+                 state.region_queue,
+                 {
+@@ -379,13 +379,13 @@ def recognition_worker(
+         else:
+             for f in list(futures):
+                 f.cancel()
+-            executor.shutdown(wait=False)
++            executor.shutdown(wait=False, cancel_futures=True)
+ 
+     except Exception as e:
+         logger.exception("Recognition worker error: %s", e)
+         state.record_exception("RecognitionWorker", e)
+         if executor is not None:
+-            executor.shutdown(wait=False)
++            executor.shutdown(wait=False, cancel_futures=True)
+     finally:
+         state.drain_queue(state.region_queue)
+ 
+@@ -421,10 +421,12 @@ def _handle_future_result(
+             logger.warning(
+                 "Recognition failed for page %d: HTTP %s", page_idx, status_code
+             )
+-            region["content"] = None
++            raise RuntimeError(f"Region recognition HTTP {status_code}: {str(response)[:2000]}")
+     except Exception as e:
+         logger.warning("Recognition failed for page %d: %s", page_idx, e)
+-        region["content"] = None
++        e.gdb_stage = "inference"
++        e.gdb_page_number = page_idx + 1
++        raise
+     state.add_recognition_result(page_idx, region)
+ 
+ 
+diff --git a/glmocr/pipeline/pipeline.py b/glmocr/pipeline/pipeline.py
+index 699f48d..202d0ce 100644
+--- a/glmocr/pipeline/pipeline.py
++++ b/glmocr/pipeline/pipeline.py
+@@ -254,6 +254,7 @@ class Pipeline:
+                     f"OCR service at {self.ocr_client.api_host}:{self.ocr_client.api_port} "
+                     f"is no longer available"
+                 )
++                error.gdb_runtime_unusable = True
+                 logger.error("%s", error)
+                 state.record_exception("HealthWatchdog", error)
+                 break

@@ -1,0 +1,57 @@
+--- a/magic_pdf/model/async_vllm.py
++++ b/magic_pdf/model/async_vllm.py
+@@ -5,6 +5,7 @@
+ import torch
+ from loguru import logger
+ from magic_pdf.utils.load_image import load_image
++from qwen_vl_utils import fetch_image
+ 
+ 
+ class MonkeyChat_vLLM_async:
+@@ -63,10 +64,18 @@
+                 "<|im_start|>assistant\n"
+             )
+ 
++            image = load_image(img_path, max_size=1600, raise_on_error=True)
++            # Both pinned checkpoints use patch_size=14 and merge_size=2.
++            # Only tiny regions need the official HF vision normalization.
++            if min(image.size) < 28:
++                original_size = image.size
++                image = fetch_image({"image": image})
++                logger.info(f"{req_id}: normalized tiny image {original_size} -> {image.size}")
++
+             inputs = {
+                 "prompt": prompt,
+                 "multi_modal_data": {
+-                    "image": [load_image(img_path, max_size=1600)],
++                    "image": [image],
+                 }
+             }
+ 
+--- a/magic_pdf/utils/load_image.py
++++ b/magic_pdf/utils/load_image.py
+@@ -49,7 +49,7 @@
+     return Image.open(BytesIO(base64.b64decode(image)))
+ 
+ 
+-def load_image(image_url: Union[str, Image.Image], max_pixels: int = None, max_size: int = None, min_size: int = None) -> Image.Image:
++def load_image(image_url: Union[str, Image.Image], max_pixels: int = None, max_size: int = None, min_size: int = None, *, raise_on_error: bool = False) -> Image.Image:
+     """load image from url, local path or openai GPT4V."""
+     FETCH_TIMEOUT = int(os.environ.get('LMDEPLOY_FETCH_TIMEOUT', 10))
+     headers = {
+@@ -90,6 +90,8 @@
+             new_size = (int(img.size[0] * scale), int(img.size[1] * scale))
+             img = img.resize(new_size, Image.LANCZOS)
+     except Exception as error:
++        if raise_on_error:
++            raise
+         if isinstance(image_url, str) and len(image_url) > 100:
+             image_url = image_url[:100] + ' ...'
+         logger.error(f'{error}, image_url={image_url}')
+@@ -117,4 +119,4 @@
+         img = Image.frombytes('RGB', (pm.width, pm.height), pm.samples)
+         imgs.append(img)
+ 
+-    return imgs
+\ No newline at end of file
++    return imgs

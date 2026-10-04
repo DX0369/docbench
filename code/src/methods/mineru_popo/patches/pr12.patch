@@ -1,0 +1,531 @@
+diff --git a/post_processing/get_json_tree.py b/post_processing/get_json_tree.py
+--- a/post_processing/get_json_tree.py
++++ b/post_processing/get_json_tree.py
+@@ -19,7 +19,7 @@
+     'footnote': 'page_footnote',
+ }
+ 
+-def cp_init(cp_type="",title="",metadata="",content="",level=-1,location=None,block_ids=None):
++def cp_init(cp_type="",title="",metadata="",content="",level=-1,location=None,block_ids=None,img_path="",caption=""):
+     # Create a component
+     cp = {
+         'type': cp_type,
+@@ -28,7 +28,9 @@ def cp_init(cp_type="",title="",metadata="",content="",level=-1,location=None,bl
+         'content': content,
+         'level': level,
+         'location': [] if not location else location,
+-        'block_ids': [] if not block_ids else block_ids
++        'block_ids': [] if not block_ids else block_ids,
++        'img_path': img_path,
++        'caption': caption,
+     }
+     return cp
+ 
+@@ -102,7 +104,7 @@ def add_special_elements(text_tree, elements):
+             if element['type'] in ['table', 'chart', 'image', 'seal', 'image_block']:
+                 locations = element.get('merged_locations', [{'bbox':element['bbox'], 'page':element['page']}])
+                 block_ids = element.get('merged_block_ids', [element['id']])
+-                visual_component = cp_init(cp_type=element['type'], content = element['content'], level = element['image'], location = locations, block_ids = block_ids)
++                visual_component = cp_init(cp_type=element['type'], content = element['content'], level = element['image'], location = locations, block_ids = block_ids, img_path = element.get('img_path', ''), caption = element.get('caption', ''))
+                 
+                 for elem in elements:
+                     if elem['image'] == element['id']:
+diff --git a/post_processing/label_normalization.py b/post_processing/label_normalization.py
+--- a/post_processing/label_normalization.py
++++ b/post_processing/label_normalization.py
+@@ -53,6 +53,8 @@ class NormalizedBlock:
+     popo_type: str
+     title_level: int | None = None
+     source_label: str | None = None
++    img_path: str = ""  # MinerU content_list uses "img_path", middle.json uses "image_path"; we emit "img_path" on output to match content_list.json
++    caption: str = ""  # caption text for image/table blocks
+     meta: dict[str, Any] = field(default_factory=dict)
+ 
+     def to_dict(self) -> dict[str, Any]:
+@@ -70,6 +72,10 @@ def to_popo_block(self) -> dict[str, Any]:
+         if self.source_label is not None:
+             block["source_label"] = self.source_label
+         block["source_id"] = self.block_id
++        if self.img_path:
++            block["img_path"] = self.img_path
++        if self.caption:
++            block["caption"] = self.caption
+         return block
+ 
+ 
+@@ -112,6 +118,8 @@ def make_block(
+         popo_type: str | None = None,
+         title_level: int | None = None,
+         source_label: str | None = None,
++        img_path: str = "",
++        caption: str = "",
+         page_width: float | int | None = None,
+         page_height: float | int | None = None,
+         meta: dict[str, Any] | None = None,
+@@ -128,6 +136,8 @@ def make_block(
+             popo_type=popo_type or canonical_type,
+             title_level=title_level,
+             source_label=source_label,
++            img_path=img_path,
++            caption=caption,
+             meta=meta or {},
+         )
+ 
+@@ -138,6 +148,15 @@ def normalize_text(text: Any) -> str:
+     return re.sub(r"\s+", " ", text).strip()
+ 
+ 
++def _join_str_list(value: Any) -> str:
++    """Join a list field (image_caption / table_caption / etc.) into a string."""
++    if not value:
++        return ""
++    if isinstance(value, list):
++        return " ".join(str(v) for v in value if v)
++    return str(value)
++
++
+ def safe_json_load(path: str | Path) -> Any:
+     return json.loads(Path(path).read_text(encoding="utf-8"))
+ 
+@@ -505,6 +524,33 @@ def _read_model(self, doc_id: str, model_path: Path) -> ReaderResult:
+                 order += 1
+         return finalize_reader_result(self.model_name, doc_id, blocks)
+ 
++    def _extract_image_path(self, item: dict[str, Any]) -> str:
++        """Pull image_path from para_block.blocks[*].lines[*].spans[*].image_path.
++
++        Note: middle.json uses "image_path" (full word); content_list.json and
++        our output use "img_path" (abbreviated). MinerU naming inconsistency.
++        """
++        for sub_block in item.get("blocks") or []:
++            for line in sub_block.get("lines") or []:
++                for span in line.get("spans") or []:
++                    if path := span.get("image_path"):
++                        return str(path)
++        return ""
++
++    def _extract_caption(self, item: dict[str, Any], sub_type: str) -> str:
++        """Pull caption text from sub_blocks of the given type (e.g. 'table_caption').
++        Text is in lines[*].spans[*].content; multiple matches joined with space.
++        """
++        texts: list[str] = []
++        for sub_block in item.get("blocks") or []:
++            if sub_block.get("type") != sub_type:
++                continue
++            for line in sub_block.get("lines") or []:
++                for span in line.get("spans") or []:
++                    if content := span.get("content"):
++                        texts.append(str(content))
++        return " ".join(texts)
++
+     def _read_middle(self, doc_id: str, middle_path: Path) -> ReaderResult:
+         data = safe_json_load(middle_path)
+         blocks: list[NormalizedBlock] = []
+@@ -521,6 +567,12 @@ def _read_middle(self, doc_id: str, middle_path: Path) -> ReaderResult:
+                 content = extract_block_content(item)
+                 if not content and canonical in {"text", "title", "caption"}:
+                     continue
++                # Extract image_path + caption from middle.json's nested sub_blocks.
++                img_path = self._extract_image_path(item)
++                caption = ""
++                if canonical in ("image", "table"):
++                    caption = self._extract_caption(item, f"{canonical}_caption")
++
+                 blocks.append(
+                     self.make_block(
+                         doc_id,
+@@ -531,6 +583,8 @@ def _read_middle(self, doc_id: str, middle_path: Path) -> ReaderResult:
+                         content,
+                         popo_type=popo_type,
+                         source_label=str(item.get("type", "")),
++                        img_path=img_path,
++                        caption=caption,
+                         page_width=page_width,
+                         page_height=page_height,
+                     )
+@@ -565,6 +619,9 @@ def _read_content_list(self, doc_id: str, content_items: list[dict[str, Any]]) -
+                     popo_type=popo_type,
+                     title_level=level,
+                     source_label=str(item.get("type", "")),
++                    # content_list.json uses "img_path" (middle.json uses "image_path")
++                    img_path=str(item.get("img_path", "")),
++                    caption=_join_str_list(item.get("image_caption") or item.get("table_caption")),
+                     meta={"source": "content_list"},
+                 )
+             )
+diff --git a/post_processing/test_img_path.py b/post_processing/test_img_path.py
+new file mode 100644
+--- /dev/null
++++ b/post_processing/test_img_path.py
+@@ -0,0 +1,371 @@
++"""Tests for img_path propagation through the normalization layer.
++
++Regression tests for https://github.com/opendatalab/MinerU-Popo/issues/11:
++MineruReader was reading img_path from content_list only to infer page
++dimensions via PIL, then dropping it. These tests verify that img_path is
++now propagated onto NormalizedBlock so downstream consumers (build_tree,
++document-tree users like passion-index) can locate image files directly.
++"""
++import json
++import sys
++from pathlib import Path
++
++# Allow running from post_processing/ or repo root
++sys.path.insert(0, str(Path(__file__).parent))
++
++from label_normalization import MineruReader  # noqa: E402
++
++
++def _write_content_list(root: Path, doc_id: str, content_list: list[dict]) -> Path:
++    """Build a synthetic MinerU doc dir with a content_list.json inside <root>/<doc>/vlm/."""
++    doc_dir = root / doc_id / "vlm"
++    doc_dir.mkdir(parents=True, exist_ok=True)
++    path = doc_dir / f"{doc_id}_content_list.json"
++    path.write_text(json.dumps(content_list), encoding="utf-8")
++    return path
++
++
++def test_image_block_carries_img_path(tmp_path):
++    """img_path on an image item in content_list should land on the
++    corresponding NormalizedBlock.img_path."""
++    content_list = [
++        {"type": "text", "content": "hello", "bbox": [0, 0, 100, 100], "page_idx": 0},
++        {
++            "type": "image",
++            "img_path": "images/abc123.jpg",
++            "bbox": [0, 0, 100, 100],
++            "page_idx": 0,
++            "content": "",
++        },
++    ]
++    _write_content_list(tmp_path, "doc1", content_list)
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc("doc1")
++
++    image_blocks = [b for b in result.blocks if b.type == "image"]
++    assert len(image_blocks) == 1, f"expected 1 image block, got {len(image_blocks)}"
++    assert image_blocks[0].img_path == "images/abc123.jpg", (
++        f"img_path should propagate from content_list, got {image_blocks[0].img_path!r}"
++    )
++
++
++def test_non_image_blocks_have_empty_img_path(tmp_path):
++    """Text/title/caption blocks should keep img_path="" (MinerU only puts
++    img_path on image items)."""
++    content_list = [
++        {"type": "text", "content": "hello", "bbox": [0, 0, 100, 100], "page_idx": 0},
++        {"type": "title", "content": "Chapter", "bbox": [0, 0, 100, 100], "page_idx": 0},
++    ]
++    _write_content_list(tmp_path, "doc1", content_list)
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc("doc1")
++
++    assert len(result.blocks) > 0
++    for block in result.blocks:
++        assert block.img_path == "", (
++            f"{block.type} block should have empty img_path, got {block.img_path!r}"
++        )
++
++
++def test_img_path_absent_in_source_defaults_empty(tmp_path):
++    """Defensive: if an image item somehow lacks img_path, the field should
++    default to "" rather than raising KeyError."""
++    content_list = [
++        {
++            "type": "image",
++            # NOTE: no "img_path" key
++            "bbox": [0, 0, 100, 100],
++            "page_idx": 0,
++            "content": "",
++        },
++    ]
++    _write_content_list(tmp_path, "doc1", content_list)
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc("doc1")
++
++    image_blocks = [b for b in result.blocks if b.type == "image"]
++    assert len(image_blocks) == 1
++    assert image_blocks[0].img_path == ""
++
++
++def test_cp_init_includes_img_path():
++    """get_json_tree.cp_init should accept and propagate img_path to the
++    component dict (used for image/table/chart nodes in build_tree)."""
++    from get_json_tree import cp_init
++
++    cp = cp_init(cp_type="image", content="", level=42, img_path="images/foo.jpg")
++    assert cp["img_path"] == "images/foo.jpg"
++
++    # Default empty string when not passed
++    cp2 = cp_init(cp_type="text")
++    assert cp2["img_path"] == ""
++
++
++# --- middle.json path tests (the real path MineruReader takes; fixes #11) ---
++
++def test_extract_image_path_from_middle_json_layout(tmp_path):
++    """_extract_image_path should pull image_path from middle.json's deeply
++    nested structure: para_block.blocks[*].lines[*].spans[*].image_path."""
++    # Synthetic middle.json image block
++    item = {
++        "type": "image",
++        "bbox": [30, 55, 505, 673],
++        "blocks": [
++            {
++                "type": "image_body",
++                "lines": [
++                    {
++                        "bbox": [30, 55, 505, 673],
++                        "spans": [
++                            {
++                                "bbox": [30, 55, 505, 673],
++                                "type": "image",
++                                "image_path": "abc123.jpg",  # middle.json uses "image_path"
++                            }
++                        ],
++                    }
++                ],
++            }
++        ],
++    }
++    reader = MineruReader(tmp_path)
++    assert reader._extract_image_path(item) == "abc123.jpg"
++
++
++def test_extract_image_path_missing_or_empty(tmp_path):
++    """_extract_image_path returns "" for various missing-field shapes."""
++    reader = MineruReader(tmp_path)
++    assert reader._extract_image_path({}) == ""
++    assert reader._extract_image_path({"type": "image"}) == ""  # no blocks
++    assert reader._extract_image_path({"blocks": []}) == ""
++    assert reader._extract_image_path({"blocks": [{"lines": []}]}) == ""
++    # Span without image_path key
++    assert reader._extract_image_path(
++        {"blocks": [{"lines": [{"spans": [{"type": "image"}]}]}]}
++    ) == ""
++
++
++def test_read_middle_extracts_img_path(tmp_path):
++    """End-to-end: read_doc on a doc with only middle.json (no content_list)
++    should populate NormalizedBlock.img_path from the nested image_path field.
++
++    This is the PRIMARY path — read_doc prefers middle.json over content_list.
++    """
++    middle_json = {
++        "pdf_info": [
++            {
++                "page_idx": 0,
++                "page_size": [600, 800],
++                "para_blocks": [
++                    {
++                        "type": "image",
++                        "bbox": [30, 55, 505, 673],
++                        "blocks": [
++                            {
++                                "type": "image_body",
++                                "lines": [
++                                    {
++                                        "bbox": [30, 55, 505, 673],
++                                        "spans": [
++                                            {
++                                                "bbox": [30, 55, 505, 673],
++                                                "type": "image",
++                                                "image_path": "xyz789.jpg",
++                                            }
++                                        ],
++                                    }
++                                ],
++                            }
++                        ],
++                    }
++                ],
++            }
++        ]
++    }
++
++    doc_id = "doc1"
++    doc_dir = tmp_path / doc_id / "vlm"
++    doc_dir.mkdir(parents=True)
++    (doc_dir / f"{doc_id}_middle.json").write_text(json.dumps(middle_json))
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc(doc_id)
++
++    image_blocks = [b for b in result.blocks if b.type == "image"]
++    assert len(image_blocks) == 1, f"expected 1 image block, got {len(image_blocks)}"
++    assert image_blocks[0].img_path == "xyz789.jpg", (
++        f"_read_middle should extract image_path from nested structure, "
++        f"got {image_blocks[0].img_path!r}"
++    )
++
++
++def test_read_middle_extracts_img_path_for_table(tmp_path):
++    """Table blocks also carry an embedded raster image (MinerU renders tables
++    as images). _read_middle should extract img_path for them too, not just
++    for type=image blocks.
++    """
++    middle_json = {
++        "pdf_info": [
++            {
++                "page_idx": 0,
++                "page_size": [600, 800],
++                "para_blocks": [
++                    {
++                        "type": "table",
++                        "bbox": [30, 55, 505, 673],
++                        "blocks": [
++                            {
++                                "type": "table_body",
++                                "lines": [
++                                    {
++                                        "bbox": [30, 55, 505, 673],
++                                        "spans": [
++                                            {
++                                                "bbox": [30, 55, 505, 673],
++                                                "type": "image",
++                                                "image_path": "table_raster.jpg",
++                                            }
++                                        ],
++                                    }
++                                ],
++                            }
++                        ],
++                    }
++                ],
++            }
++        ]
++    }
++
++    doc_id = "doc1"
++    doc_dir = tmp_path / doc_id / "vlm"
++    doc_dir.mkdir(parents=True)
++    (doc_dir / f"{doc_id}_middle.json").write_text(json.dumps(middle_json))
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc(doc_id)
++
++    table_blocks = [b for b in result.blocks if b.type == "table"]
++    assert len(table_blocks) == 1
++    assert table_blocks[0].img_path == "table_raster.jpg", (
++        f"_read_middle should extract img_path for table blocks too, "
++        f"got {table_blocks[0].img_path!r}"
++    )
++
++
++def test_read_middle_extracts_caption_for_table(tmp_path):
++    """Table blocks should carry caption text extracted from middle.json's
++    sub_blocks (type=table_caption, text in lines[*].spans[*].content).
++    """
++    middle_json = {
++        "pdf_info": [{
++            "page_idx": 0,
++            "page_size": [600, 800],
++            "para_blocks": [{
++                "type": "table",
++                "bbox": [30, 55, 505, 200],
++                "blocks": [
++                    {
++                        "type": "table_caption",
++                        "lines": [{"spans": [{"content": "Table 1. Patient Characteristics."}]}],
++                    },
++                    {
++                        "type": "table_body",
++                        "lines": [{"spans": [{"image_path": "table1.jpg"}]}],
++                    },
++                ],
++            }],
++        }]
++    }
++    doc_id = "doc1"
++    doc_dir = tmp_path / doc_id / "vlm"
++    doc_dir.mkdir(parents=True)
++    (doc_dir / f"{doc_id}_middle.json").write_text(json.dumps(middle_json))
++
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc(doc_id)
++
++    tables = [b for b in result.blocks if b.type == "table"]
++    assert len(tables) == 1
++    assert tables[0].caption == "Table 1. Patient Characteristics.", (
++        f"expected caption extracted, got {tables[0].caption!r}"
++    )
++    assert tables[0].img_path == "table1.jpg"
++
++
++def test_to_popo_block_emits_caption(tmp_path):
++    """to_popo_block should emit caption when set (alongside img_path)."""
++    content_list = [
++        {
++            "type": "table",
++            "img_path": "images/t1.jpg",
++            "table_caption": ["Table 2. Efficacy Outcomes."],
++            "bbox": [0, 0, 100, 100],
++            "page_idx": 0,
++            "content": "",
++        }
++    ]
++    _write_content_list(tmp_path, "doc1", content_list)
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc("doc1")
++
++    tables = [b for b in result.blocks if b.type == "table"]
++    assert len(tables) == 1
++    pb = tables[0].to_popo_block()
++    assert pb.get("caption") == "Table 2. Efficacy Outcomes.", f"caption missing in to_popo_block: {pb!r}"
++    assert pb.get("img_path") == "images/t1.jpg"
++
++
++def test_to_popo_block_emits_img_path(tmp_path):
++    """to_popo_block (used by label_normalization's to_popo_pages output)
++    should emit img_path when set, so the field survives into the JSON that
++    inference.py + build_tree.py consume.
++
++    Without this, the field is dropped at serialization even though
++    NormalizedBlock carries it (regression test for the original #11 fix
++    that was incomplete).
++    """
++    from label_normalization import to_popo_pages
++
++    content_list = [
++        {
++            "type": "image",
++            "img_path": "images/abc.jpg",
++            "bbox": [0, 0, 100, 100],
++            "page_idx": 0,
++            "content": "",
++        },
++        {
++            "type": "text",
++            "content": "hello",
++            "bbox": [0, 0, 100, 100],
++            "page_idx": 0,
++        },
++    ]
++    _write_content_list(tmp_path, "doc1", content_list)
++    reader = MineruReader(tmp_path)
++    result = reader.read_doc("doc1")
++
++    # to_popo_block on the image block should include img_path
++    image_blocks = [b for b in result.blocks if b.type == "image"]
++    assert len(image_blocks) == 1
++    pb = image_blocks[0].to_popo_block()
++    assert pb.get("img_path") == "images/abc.jpg", (
++        f"to_popo_block should emit img_path, got {pb!r}"
++    )
++
++    # text blocks should NOT carry img_path (keep output clean)
++    text_blocks = [b for b in result.blocks if b.type == "text"]
++    for tb in text_blocks:
++        assert "img_path" not in tb.to_popo_block(), (
++            f"text block to_popo_block should not emit empty img_path, got {tb.to_popo_block()!r}"
++        )
++
++    # to_popo_pages output (what label_normalization actually writes)
++    pages = to_popo_pages(result.blocks)
++    flat = [b for blocks in pages.values() for b in blocks]
++    image_dicts = [b for b in flat if b.get("type") == "image"]
++    assert len(image_dicts) == 1
++    assert image_dicts[0].get("img_path") == "images/abc.jpg"

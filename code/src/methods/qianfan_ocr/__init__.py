@@ -1,0 +1,1 @@
+"""Qianfan-OCR adapters."""

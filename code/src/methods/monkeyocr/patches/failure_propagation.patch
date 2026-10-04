@@ -1,0 +1,49 @@
+diff --git a/magic_pdf/model/async_vllm.py b/magic_pdf/model/async_vllm.py
+index 86e579b..4d23008 100644
+--- a/magic_pdf/model/async_vllm.py
++++ b/magic_pdf/model/async_vllm.py
+@@ -78,14 +78,14 @@ class MonkeyChat_vLLM_async:
+                         logger.info(f"{req_id} aborted due to timeout")
+                     except Exception as abort_err:
+                         logger.warning(f"Abort failed for {req_id}: {abort_err}")
+-                    return "Error: Request timed out"
++                    raise TimeoutError("Request timed out")
+                 final_output = out
+                 if getattr(out, "finished", False):
+                     break
+ 
+             if final_output and getattr(final_output, "outputs", None):
+                 return final_output.outputs[0].text
+-            return "Error: No output generated"
++            raise RuntimeError("No output generated")
+ 
+         async def bounded(img: str, q: str, idx: int):
+             async with semaphore:
+@@ -94,16 +94,16 @@ class MonkeyChat_vLLM_async:
+                     return await infer_one(img, q, req_id)
+                 except Exception as e:
+                     logger.error(f"Task {idx} failed: {e}")
+-                    return f"Error: {str(e)}"
++                    raise
+ 
+         tasks = [bounded(img, q, i) for i, (img, q) in enumerate(zip(images, questions))]
+         results = await asyncio.gather(*tasks, return_exceptions=True)
+ 
+         out = []
+         for i, r in enumerate(results):
+-            if isinstance(r, Exception):
++            if isinstance(r, BaseException):
+                 logger.error(f"Task {i} exception: {r}")
+-                out.append(f"Error: {str(r)}")
++                raise r
+             else:
+                 out.append(r)
+         return out
+@@ -130,4 +130,4 @@ class MonkeyChat_vLLM_async:
+                 return fut.result(timeout=self.request_timeout)
+             except Exception as e:
+                 logger.error(f"Synchronous batch inference failed: {e}")
+-                return [f"Error: {str(e)}"] * len(images)
+\ No newline at end of file
++                raise
+         

@@ -1,0 +1,39 @@
+diff --git a/post_processing/model_utils.py b/post_processing/model_utils.py
+index 88dc43a..4fe4be3 100644
+--- a/post_processing/model_utils.py
++++ b/post_processing/model_utils.py
+@@ -14,7 +14,8 @@ _TRANSFORMERS_MODEL = None
+ _TRANSFORMERS_PROCESSOR = None
+ 
+ 
+-def _transformers_generate(prompt, base64_image):
++def initialize_transformers():
++    """Load once without processing a warmup document; also used by lazy inference."""
+     global _TRANSFORMERS_MODEL, _TRANSFORMERS_PROCESSOR
+     import torch
+     from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+@@ -23,8 +24,6 @@ def _transformers_generate(prompt, base64_image):
+         "POPO_MODEL_PATH",
+         "popo_model",
+     )
+-    max_new_tokens = int(os.environ.get("POPO_MAX_NEW_TOKENS", "2048"))
+-
+     if _TRANSFORMERS_MODEL is None or _TRANSFORMERS_PROCESSOR is None:
+         _TRANSFORMERS_MODEL = Qwen3VLForConditionalGeneration.from_pretrained(
+             model_path,
+@@ -38,6 +37,15 @@ def _transformers_generate(prompt, base64_image):
+         if hasattr(_TRANSFORMERS_PROCESSOR, "tokenizer") and hasattr(_TRANSFORMERS_PROCESSOR.tokenizer, "padding_side"):
+             _TRANSFORMERS_PROCESSOR.tokenizer.padding_side = "left"
+ 
++    return _TRANSFORMERS_MODEL, _TRANSFORMERS_PROCESSOR
++
++
++def _transformers_generate(prompt, base64_image):
++    import torch
++
++    initialize_transformers()
++    max_new_tokens = int(os.environ.get("POPO_MAX_NEW_TOKENS", "2048"))
++
+     content = []
+     if base64_image:
+         content.append(

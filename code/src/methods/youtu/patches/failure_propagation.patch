@@ -1,0 +1,104 @@
+diff --git a/youtu_hf_parser/youtu_ocr_parser_hf.py b/youtu_hf_parser/youtu_ocr_parser_hf.py
+index 06b51e1..f3a8fe3 100644
+--- a/youtu_hf_parser/youtu_ocr_parser_hf.py
++++ b/youtu_hf_parser/youtu_ocr_parser_hf.py
+@@ -244,8 +244,10 @@ class YoutuOCRParserHF:
+                 recognize_results[i] = ''.join(item['content'] + '\n' for item in figtext_items)
+             except Exception as e:
+                 print(f"FIGURE crop recognition error: {e}")
+-                recognize_results[i] = ""
+-    
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_figure_items"
++                raise
++
+     def _process_chart_items(self, 
+                             image: Image.Image, 
+                             layout_items: List[List], 
+@@ -261,8 +263,10 @@ class YoutuOCRParserHF:
+                 recognize_results[i] = response_box_content if response_box_content else ""
+             except Exception as e:
+                 print(f"CHART recognition error: {e}")
+-                recognize_results[i] = ""
+-    
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_chart_items"
++                raise
++
+     def _process_seal_items(self, 
+                             image: Image.Image, 
+                             layout_items: List[List], 
+@@ -278,7 +282,9 @@ class YoutuOCRParserHF:
+                 recognize_results[i] = response_box_content if response_box_content else ""
+             except Exception as e:
+                 print(f"SEAL recognition error: {e}")
+-                recognize_results[i] = ""
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_seal_items"
++                raise
+ 
+     def _process_table_items(self, 
+                             image: Image.Image, 
+@@ -296,7 +302,9 @@ class YoutuOCRParserHF:
+                 recognize_results[i] = convert_table_ostl_to_html(response_box_content) if response_box_content else ""
+             except Exception as e:
+                 print(f"TABLE recognition or HTML conversion error: {e}")
+-                recognize_results[i] = ""
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_table_items"
++                raise
+ 
+     def _process_formula(self, 
+                          image: Image.Image, 
+@@ -332,7 +340,9 @@ class YoutuOCRParserHF:
+                 recognize_results[i] = results[0] if results else ""
+             except Exception as e:
+                 print(f"FORMULA recognition error: {e}")
+-                recognize_results[i] = ""
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_formula"
++                raise
+ 
+     def _process_ocr_items_batch(self, 
+                                 image: Image.Image, 
+@@ -370,9 +380,10 @@ class YoutuOCRParserHF:
+                     recognize_results[idx] = batch_results[j] if j < len(batch_results) else ""
+             except Exception as e:
+                 print(f"Batch OCR recognition error: {e}")
+-                for idx in batch_indices:
+-                    recognize_results[idx] = ""
+-    
++                if not hasattr(e, "gdb_stage"):
++                    e.gdb_stage = "process_ocr_items_batch"
++                raise
++
+     def _process_hierarchical_layout(self, 
+                                    image: Image.Image, 
+                                    layout_items: List[List], 
+@@ -431,7 +442,9 @@ class YoutuOCRParserHF:
+             
+         except Exception as e:
+             print(f"HIERARCHICAL layout processing error: {e}")
+-            return '', {}
++            if not hasattr(e, "gdb_stage"):
++                e.gdb_stage = "hierarchy"
++            raise
+ 
+     def _parse_document(self, 
+                             image: Image.Image, 
+@@ -564,12 +577,9 @@ class YoutuOCRParserHF:
+             )
+         except Exception as e:
+             print(f"[WARNING] Failed to build hierarchy JSON: {e}")
+-            hierarchy_json = {
+-                "total_nodes": 0,
+-                "root_count": 0,
+-                "max_level": 0,
+-                "nodes": []
+-            }
++            if not hasattr(e, "gdb_stage"):
++                e.gdb_stage = "hierarchy"
++            raise
+ 
+         return result, page_angle, hierarchy_json
+ 

@@ -1,0 +1,39 @@
+diff --git a/magic_pdf/model/async_vllm.py b/magic_pdf/model/async_vllm.py
+--- a/magic_pdf/model/async_vllm.py
++++ b/magic_pdf/model/async_vllm.py
+@@ -8,7 +8,10 @@ from magic_pdf.utils.load_image import load_image
+ 
+ 
+ class MonkeyChat_vLLM_async:
+-    def __init__(self, model_path, tp=1):
++    def __init__(self, model_path, tp=1, region_concurrency=64):
++        if type(region_concurrency) is not int or region_concurrency < 1:
++            raise ValueError("region_concurrency must be a positive integer")
++        self.region_concurrency = region_concurrency
+         try:
+             from vllm import AsyncLLMEngine, SamplingParams
+             from vllm.engine.arg_utils import AsyncEngineArgs
+@@ -48,7 +51,7 @@ class MonkeyChat_vLLM_async:
+         if len(images) != len(questions):
+             raise ValueError("Images and questions must have the same length")
+ 
+-        semaphore = asyncio.Semaphore(min(64, max(1, len(images))))
++        semaphore = asyncio.Semaphore(min(self.region_concurrency, max(1, len(images))))
+         timeout_s = 300
+ 
+         async def infer_one(img_path: str, q: str, req_id: str) -> str:
+diff --git a/magic_pdf/model/custom_model.py b/magic_pdf/model/custom_model.py
+--- a/magic_pdf/model/custom_model.py
++++ b/magic_pdf/model/custom_model.py
+@@ -149,7 +149,10 @@ class MonkeyOCR:
+         elif chat_backend == 'vllm_async':
+             logger.info('using backend: vLLM Async')
+             tp = self.chat_config.get('model_parallelism', 1)
+-            self.chat_model = MonkeyChat_vLLM_async(chat_path, tp=tp)
++            self.chat_model = MonkeyChat_vLLM_async(
++                chat_path, tp=tp,
++                region_concurrency=self.chat_config.get('region_concurrency', 64),
++            )
+         elif chat_backend == 'transformers':
+             logger.info('using backend: transformers')
+             batch_size = self.chat_config.get('batch_size', 5)
