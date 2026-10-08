@@ -73,6 +73,8 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | Marker | 共享模型 worker | 文档 worker 数 | worker 跨文档复用 |
 | MinerU 3.0.3/3.4.x | hybrid API + 文档客户端 | 客户端数及 API 任务上限 | 整 PDF 请求 |
 | Youtu native | shared-feature/query | query 分组数 | query 可跨文档供给 |
+| TeleOCR vLLM async | 常驻 AsyncLLM 两阶段页面流水线 | 当前 PDF 内共享的 layout/region 请求信号量 | 文档之间按官方顺序处理 |
+| LightOnOCR-2-1B | 官方 vLLM 单页 VLM + 全局 page pool | 页面在途数 | 页面可跨文档供给；不支持已登记的整文档 joint |
 
 ### 生成长度和上下文参数来源
 
@@ -97,6 +99,8 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | PP-StructureV3 | 各识别子模型使用官方 native 配置，无全局长度值 | 不设置统一生成/上下文上限 |
 | Marker | 当前关闭 LLM | 不适用 |
 | MinerU-Popo | Popo 官方脚本生成上限 8192；未提供固定服务上下文 | Popo 生成 8192；默认 `popo_max_model_len=32768`，仍可显式覆盖 |
+| TeleOCR vLLM async | 官方 `vllm-async-engine`、`MAX_MODEL_LEN=16384`、`GPU_MEMORY_UTILIZATION=0.95`、PDF worker 4；上游 `max_concurrency=100` | backend/layout/PDF worker 保持上述值；P 显式覆盖请求 semaphore；不设置 `max_num_seqs` |
+| LightOnOCR-2-1B | 官方 vLLM 示例：每请求一张图片、`max_tokens=4096`、`temperature=0.2`、`top_p=0.9`；服务参数为 image limit 1、processor cache 0、关闭 prefix caching | 生成 4096；200 DPI、最长边 1540；不显式设置 `max_num_seqs` 或 `max_model_len` |
 
 本节中的硬件安全值不等于官方最大值。特别是 Hunyuan 1.5 的 65536、GLM 的 32768、
 Paddle 的 16384、Unlimited 的 16384 以及 Popo 的 32768，都必须随运行 metadata 记录。
@@ -108,6 +112,17 @@ Paddle/GLM 的页面、布局 batch 和内部线程先保持官方值；PP-Struc
 Monkey 两个 checkpoint 使用独立 ID 但共用 async runtime；MinerU 不调整内部 VLM batch、页窗口和组件 batch；
 Qianfan/Unlimited 的 joint 与 page_pool 结果不能混排。MinerU-Popo 需要同时驻留两个模型，3090 尚未形成稳定 profile，
 暂不纳入正式调参。
+
+### Latency 参数口径
+
+Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan `page_pool` 和
+Unlimited `page_pool` 使用页面级 `P=1`；Qianfan/Unlimited `joint` 以及其他方法只
+固定一个外层文档客户端。Monkey 使用官方区域并发 64，TeleOCR 使用 async 默认 100，
+Youtu 使用 query batch 5；Paddle 不显式传 `vl_rec_max_concurrency`，GLM 不显式传
+`max_workers`（锁定 YAML 的 32），PP 使用基础 `batch_scale=1`，Marker 使用一个
+文档 worker，MinerU 不覆盖 API 的默认并发和 processing window。Latency summary 会
+记录 `latency_profile=official_defaults`；命令行中的 `--pressure 1` 只表示文档级
+latency 标识，不代表所有内部并发均为 1。
 
 ## 三、实验记录摘要
 

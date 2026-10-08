@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Register the installed Xiaomi-OCR MCP server in the current user's Codex config."""
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import tomlkit
+from pathlib import Path
+
+
+def updated_config(original, python, server_path, endpoint, model, repo):
+    document = tomlkit.parse(original)
+    servers = document.setdefault("mcp_servers", tomlkit.table())
+    entry = servers.setdefault("xiaomi-ocr", tomlkit.table())
+    # Replacing an earlier HTTP registration must not leave two transports.
+    for key in ("url", "bearer_token_env_var", "http_headers", "env_http_headers", "transport"):
+        entry.pop(key, None)
+    entry["command"] = str(python)
+    entry["args"] = [str(server_path)]
+    env = entry.setdefault("env", tomlkit.table())
+    env["XIAOMI_OCR_LOCAL_URL"] = endpoint
+    env["XIAOMI_OCR_MODEL"] = model
+    env["XIAOMI_OCR_REPO"] = str(repo)
+    updated = tomlkit.dumps(document)
+    tomlkit.parse(updated)
+
+    return updated
+
+
+def main() -> int:
+    skill_dir = Path(__file__).resolve().parents[1]
+    python = skill_dir / ".venv" / "bin" / "python"
+    if not python.exists():
+        python = skill_dir / ".venv" / "Scripts" / "python.exe"
+    if not python.exists():
+        print("MCP environment is missing; run install.sh first.", file=sys.stderr)
+        return 1
+
+    codex_home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+    config = codex_home / "config.toml"
+    # Do not create or modify a Codex config on a machine where Codex is not installed.
+    if "CODEX_HOME" not in os.environ and not codex_home.exists():
+        print("Codex config not detected; use mcp-config.json with this agent's MCP settings.")
+        return 0
+
+    endpoint = os.environ.get("XIAOMI_OCR_LOCAL_URL", "http://127.0.0.1:8000/v1")
+    model = os.environ.get("XIAOMI_OCR_MODEL", "SeerRay-Lab/Xiaomi-OCR-0")
+    if not endpoint.startswith(("http://127.0.0.1:", "http://localhost:", "http://[::1]:")):
+        print("Refusing non-loopback OCR endpoint.", file=sys.stderr)
+        return 1
+
+    original = config.read_text(encoding="utf-8") if config.exists() else ""
+    updated = updated_config(original, python, skill_dir / "mcp_ocr_server.py", endpoint, model,
+                             os.environ.get("XIAOMI_OCR_REPO", str(skill_dir.parents[1])))
+
+    config.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix="config.toml.", dir=config.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(updated)
+        if config.exists():
+            os.chmod(temp_name, config.stat().st_mode & 0o777)
+        os.replace(temp_name, config)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+    print(f"Registered Xiaomi-OCR MCP server in {config}.")
+    print("Restart Codex to load the four OCR, PDF, KIE, and VQA tools.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

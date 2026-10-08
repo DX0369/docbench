@@ -30,6 +30,14 @@ class ExecutionProfile:
 
 
 EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
+    ExecutionProfile(
+        "teleocr_vllm_async", "teleocr_vllm_async", "integrated_parser_runtime",
+        "teleocr_request_concurrency", ("TeleOCR resident AsyncLLM layout/recognition model",),
+    ),
+    ExecutionProfile(
+        "lightonocr2_vllm_page_pool", "lightonocr2_1b", "exclusive_model_service",
+        "lighton_page_pool", ("LightOnOCR-2-1B vLLM service",),
+    ),
     *(
         ExecutionProfile(f"{method}_vllm_async_multifile", method, "integrated_parser_runtime",
                          "monkey_region_concurrency", ("MonkeyOCR model stack",))
@@ -168,6 +176,8 @@ EXECUTION_PROFILE_BY_ID = {
 }
 
 DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
+    "teleocr_vllm_async": "teleocr_vllm_async",
+    "lightonocr2_1b": "lightonocr2_vllm_page_pool",
     "mineru_344_2605_popo": "mineru_344_2605_popo_vllm_services",
     "deepseek_ocr2": "deepseek_ocr2_page_pool",
     "glmocr": "glmocr_multi_pdf_regions",
@@ -232,6 +242,20 @@ def resolve_execution_profile(
 # Non-P options only. Both throughput entrypoints use this same declaration;
 # per-method profiles cannot accumulate unrelated methods' options.
 RUNTIME_ARGUMENTS = {
+    "teleocr": [("teleocr_env", str, "gdb_teleocr"),
+        ("teleocr_model_path", str, None), ("teleocr_backend", str, "vllm-async-engine"),
+        ("teleocr_layout_mode", str, "Detection"), ("teleocr_max_model_len", int, 16384),
+        ("teleocr_gpu_memory_utilization", float, .95), ("teleocr_pdf_tools", str, "pypdfium2"),
+        ("teleocr_pdf_tools_workers", int, 4)],
+    "lightonocr2": [
+        ("lightonocr2_env", str, "gdb_glmocr"),
+        ("lightonocr2_model_path", str, None),
+        ("lightonocr2_dpi", int, 200),
+        ("lightonocr2_max_image_size", int, 1540),
+        ("lightonocr2_max_tokens", int, 4096),
+        ("lightonocr2_temperature", float, 0.2),
+        ("lightonocr2_top_p", float, 0.9),
+    ],
     "hunyuan_common": [("hunyuan_runner_env", str, "gdb_hunyuan")],
     "hunyuan_ar": [("hunyuan_service_env", str, "gdb_hunyuan"),
         ("hunyuan_vllm_gpu_memory_utilization", float, None),
@@ -271,6 +295,7 @@ def add_runtime_arguments(parser):
     from methods.unlimited_ocr.commands import add_runtime_args as unlimited_args
     from methods.pp_structurev3.commands import add_runtime_args as pp_args
     choices = {"qianfan_request_mode": ("joint", "page_pool"), "qianfan_execution_mode": ("auto", "eager"),
+               "teleocr_backend": ("vllm-async-engine",), "teleocr_layout_mode": ("Detection",),
                "mineru_parse_method": ("auto", "txt", "ocr"), "pp_device": ("gpu", "cpu")}
     for specs in RUNTIME_ARGUMENTS.values():
         for key, typ, default in specs:
@@ -298,7 +323,9 @@ def runtime_keys(method):
         groups = ("mineru",)
     else:
         groups = {"deepseek_ocr2": ("deepseek",), "glmocr": ("glm",), "youtu": ("youtu",),
-                  "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": ()}[method]
+                  "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": (),
+                  "teleocr_vllm_async": ("teleocr",),
+                  "lightonocr2_1b": ("lightonocr2",)}[method]
     keys = tuple(key for group in groups for key, _, _ in RUNTIME_ARGUMENTS[group])
     if method == "hunyuanocr_15_dflash":
         keys += DFLASH_KEYS
@@ -327,7 +354,15 @@ def runtime_cli_args(args, method):
 
 
 def resolve_runtime_defaults(args, method):
-    if method == "hunyuanocr_15_dflash":
+    if method == "teleocr_vllm_async":
+        from config.method_versions import get_method_version
+        args.teleocr_model_path = str(Path(args.teleocr_model_path).expanduser().resolve()
+            if args.teleocr_model_path else get_method_version(method).model_path)
+    elif method == "lightonocr2_1b":
+        from config.method_versions import get_method_version
+        args.lightonocr2_model_path = str(Path(args.lightonocr2_model_path).expanduser().resolve()
+            if args.lightonocr2_model_path else get_method_version(method).model_path)
+    elif method == "hunyuanocr_15_dflash":
         from methods.hunyuanocr.dflash import resolve_dflash_args
         resolve_dflash_args(args)
     elif method in ("hunyuanocr_10", "hunyuanocr_15"):

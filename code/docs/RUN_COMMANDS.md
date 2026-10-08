@@ -55,6 +55,8 @@ run_fixed() {
 run_fixed deepseek_ocr2 1
 run_fixed pp_structurev3 1
 run_fixed monkeyocr_pro_3b 4
+run_fixed teleocr_vllm_async 1
+run_fixed lightonocr2_1b 1
 ```
 
 当前正式 method ID 和 P 的实际含义如下：
@@ -78,6 +80,8 @@ run_fixed monkeyocr_pro_3b 4
 | `pp_structurev3` | 单 pipeline page prefetch | 原生 batch 缩放 |
 | `marker` | shared model workers | 文档 worker 数 |
 | `youtu` | native resident parser | query batch |
+| `teleocr_vllm_async` | resident TeleOCR vLLM async pipeline | 当前 PDF 内共享的 layout/region 请求并发 |
+| `lightonocr2_1b` | official vLLM single-page page pool | 跨 PDF 的页面在途数；每个请求固定一张图片 |
 
 Qianfan 和 Unlimited 的 page pool 路线必须显式选择，不能复用 joint 的 profile：
 
@@ -135,6 +139,43 @@ run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
     --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
 ```
 
+TeleOCR 只使用单个常驻 async runtime；P 映射为当前 PDF 内 layout/region 请求的
+`max_concurrency`，文档之间保持官方顺序，不增加 joint 或 page_pool 参数：
+
+```bash
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods teleocr_vllm_async \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_teleocr_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+LightOnOCR-2 使用官方 vLLM 单页路线，不支持整篇 PDF joint。服务端固定每个请求一张
+图片，客户端 page pool 用 P 提供跨文档页面供给：
+
+```bash
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods lightonocr2_1b \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_lightonocr2_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+固定 P 运行：
+
+```bash
+run_fixed lightonocr2_1b 4
+```
+
+该 adapter 使用模型卡的 `max_tokens=4096`、`temperature=0.2`、`top_p=0.9`、
+200 DPI 和最长边 1540 像素；不显式设置 `max_num_seqs` 或额外上下文上限。
+
 如果要对完整目录搜索，去掉 `--pdf-list-file`，改为显式指定：
 
 ```bash
@@ -184,8 +225,12 @@ Qianfan 和 Unlimited 的 `page_pool` 是独立路线，搜索时必须显式选
 ## 正式 Latency 测试
 
 Latency 与吞吐是两类独立的正式指标：吞吐测试不同 P 下的 pages/s、docs/s；
-Latency 固定 `P=1`，使用单 GPU、单 worker，逐个 PDF 记录处理耗时。Latency
-结果不能与吞吐结果共用 run ID 或输出目录。
+Latency 使用单 GPU、单外层 worker，逐个 PDF 记录处理耗时。四个页面请求路线
+（HunyuanOCR、DeepSeek-OCR-2、LightOnOCR-2、Qianfan `page_pool`、Unlimited `page_pool`）保持
+页面级 `P=1`；其他方法只把文档级并发固定为 1，内部区域并发、query batch、
+pipeline worker 和原生 batch 使用官方/default 参数。命令中的 `--pressure 1`
+只是兼容性的 latency 标识，不再把所有方法的内部参数改成 1。
+Latency 结果不能与吞吐结果共用 run ID 或输出目录。
 
 正式 Latency 使用 `experiments/latency/<run_id>/`；两文档流程验证使用下面的
 `tmp/latency_smoke/` 小节，不把 smoke 结果当作正式结论。
@@ -226,7 +271,9 @@ mkdir -p "$LATENCY_ROOT/outputs" "$LATENCY_ROOT/logs"
 ```
 
 Latency 模式只改变文档之间的调度：runtime/service 只启动一次，前一个 PDF
-完成并写出结果后才提交下一个 PDF；页面、区域和组件内部的官方并发机制保持不变。
+完成并写出结果后才提交下一个 PDF；页面路线按上面的页面规则运行，其他方法的
+区域、query 和组件内部官方/default 并发保持不变。summary 会记录
+`latency_profile=official_defaults` 及实际映射。
 每个方法应生成 `latency_summary.json`，记录单文档耗时、处理总时间、启动时间和
 失败文档。Latency 不计算 GT 或 scorer；MinerU-Popo 当前不纳入该协议。
 

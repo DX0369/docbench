@@ -59,7 +59,7 @@ class MethodSpec:
 def parse_args() -> argparse.Namespace:
     from config.execution_profiles import (add_runtime_arguments, load_selected_profile,
         profile_for_args, resolve_runtime_defaults, runtime_keys)
-    from config.throughput_pressure import DEFAULT_PRESSURE_METHODS, pressure_mapping
+    from config.throughput_pressure import DEFAULT_PRESSURE_METHODS, latency_mapping, pressure_mapping
     parser = argparse.ArgumentParser(description="Run exactly one method at one fixed pressure P; never search.", allow_abbrev=False)
     parser.add_argument("--method", required=True, choices=DEFAULT_PRESSURE_METHODS)
     parser.add_argument("--gpu-id", type=int, required=True)
@@ -105,8 +105,19 @@ def parse_args() -> argparse.Namespace:
     elif args.execution_profile is not None and args.execution_profile != profile_for_args(args.method, args):
         parser.error("--execution-profile does not match the selected request route")
     resolve_runtime_defaults(args, args.method)
-    outer, overrides, mapping, docs = pressure_mapping(args.method, args.pressure,
-        args.qianfan_request_mode, args.unlimited_ocr_request_mode)
+    if args.latency_mode:
+        outer, overrides, mapping, docs = latency_mapping(
+            args.method,
+            args.qianfan_request_mode,
+            args.unlimited_ocr_request_mode,
+        )
+    else:
+        outer, overrides, mapping, docs = pressure_mapping(
+            args.method,
+            args.pressure,
+            args.qianfan_request_mode,
+            args.unlimited_ocr_request_mode,
+        )
     if args.latency_mode and outer != 1:
         parser.error("--latency-mode requires pressure 1 to map to one worker")
     for key, value in overrides.items():
@@ -226,7 +237,7 @@ def start_vllm_service(
     env_overrides.update(method_spec.env_overrides)
     disable_dynamo = (args.hunyuan_vllm_enforce_eager if method in AR_GPU_MEMORY_DEFAULTS
                       else method != "hunyuanocr_15_dflash")
-    if method in {"deepseek_ocr2", "glmocr"} or method in MINERU_PROFILES:
+    if method in {"deepseek_ocr2", "glmocr", "lightonocr2_1b"} or method in MINERU_PROFILES:
         # Preserve the official model/vLLM compilation defaults.
         disable_dynamo = False
     if method in {"paddleocr_vl_15", "paddleocr_vl_16"}:
@@ -263,6 +274,8 @@ def start_vllm_service(
 
 
 def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
+    if method in {"teleocr_vllm_async", "lightonocr2_1b"}:
+        return True
     if method == "mineru_344_2605_popo":
         return True  # The combination coordinator owns its inner ready/start/done.
     if method == "unlimited_ocr_sglang":
@@ -298,6 +311,8 @@ def load_latency_job_statuses(record_root: Path, pdf_paths: list[Path]) -> tuple
             raise ValueError(f"Latency record must be a list: {path}")
         records.extend(payload)
     by_path = {str(item.get("pdf_path")): item for item in records}
+    if len(by_path) != len(records):
+        raise ValueError("Latency records contain duplicate PDF paths")
     statuses: list[dict[str, Any]] = []
     for pdf_path in pdf_paths:
         item = by_path.get(str(pdf_path))
@@ -338,6 +353,10 @@ def run_trial(
 ) -> Dict[str, Any]:
     if base_args.latency_mode and method == "mineru_344_2605_popo":
         raise ValueError("MinerU-Popo latency mode is not supported until the colocated services fit the target GPU")
+    if method == "teleocr_vllm_async" and (concurrency != 1 or base_args.teleocr_max_concurrency < 1):
+        raise ValueError("TeleOCR requires one resident worker and positive request concurrency")
+    if method == "lightonocr2_1b" and (concurrency != 1 or base_args.lightonocr2_page_concurrency < 1):
+        raise ValueError("LightOnOCR-2 requires one resident worker and positive page concurrency")
     if method == "mineru_344_2605_popo":
         if concurrency != 1:
             raise ValueError("Popo requires one coordinator; tune --popo-concurrency")
@@ -394,6 +413,10 @@ def run_trial(
     if method.startswith("hunyuanocr_"):
         if concurrency != 1:
             raise ValueError("Hunyuan page pool requires one outer worker; use --pressure")
+        docs_per_job = len(pdf_paths)
+    if method == "lightonocr2_1b":
+        if concurrency != 1:
+            raise ValueError("LightOnOCR-2 page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
     if method in {"qianfan_ocr", "qianfan_ocr_think"} and base_args.qianfan_request_mode == "page_pool":
         if concurrency != 1:
@@ -607,8 +630,10 @@ def run_trial(
         latency_payload = {
             "method": method,
             "measurement_mode": "latency",
+            "latency_profile": base_args.pressure_mapping["profile"],
+            "pressure_mapping": base_args.pressure_mapping,
             "pressure": base_args.pressure,
-            "startup_seconds": startup_seconds if startup_seconds else None,
+            "startup_seconds": round(processing_start - trial_start, 6) if processing_start is not None else None,
             "processing_seconds": processing_seconds,
             "total_wall_seconds": total_wall_seconds,
             "documents": latency_records,
@@ -707,6 +732,11 @@ def run_trial(
         unlimited_request_mode=base_args.unlimited_ocr_request_mode,
     ).profile_id
     if base_args.latency_mode:
+        summary["latency_profile"] = base_args.pressure_mapping.get("profile", "official_defaults")
+        summary["document_concurrency"] = concurrency
+        summary["internal_pressure_semantics"] = base_args.pressure_mapping.get(
+            "internal_pressure_semantics", "method_default"
+        )
         summary["latency_summary_path"] = str(
             trial_output_root / method / "latency_summary.json"
         )

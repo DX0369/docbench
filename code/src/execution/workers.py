@@ -67,10 +67,13 @@ def run_latency_sequence_worker(
     record_path = os.environ.get("GDB_LATENCY_RECORD_PATH")
     if not record_path:
         raise ValueError("GDB_LATENCY_RECORD_PATH is required in latency mode")
+    timing_root = os.environ.get("GDB_LATENCY_TIMING_ROOT")
+    if not timing_root:
+        raise ValueError("GDB_LATENCY_TIMING_ROOT is required in latency mode")
 
     records: list[dict[str, Any]] = []
     had_failure = False
-    with queue_processing_timing(Path(os.environ.get("GDB_LATENCY_TIMING_ROOT", "")), worker_id):
+    with queue_processing_timing(Path(timing_root), worker_id):
         for sequence, pdf_path in enumerate(pdf_paths, start=1):
             started = time.perf_counter()
             callback_error = None
@@ -81,7 +84,7 @@ def run_latency_sequence_worker(
                     callback_failed = bool(result[0])
                 else:
                     callback_failed = bool(result)
-            except BaseException as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
                 callback_failed = True
                 callback_error = f"{type(exc).__name__}: {exc}"
                 if fail_fast:
@@ -112,13 +115,31 @@ def run_latency_sequence_worker(
                     from validation.validate_outputs import validate_completed_page_counts
                     method_id = os.environ.get("GDB_LATENCY_METHOD")
                     if method_id:
-                        counts, _ = validate_completed_page_counts(
+                        counts, validation_failures = validate_completed_page_counts(
                             method_id, input_root, output_root, [pdf_path]
                         )
                         if pdf_path in counts:
                             record["input_page_count"] = counts[pdf_path]
+                        else:
+                            failed = True
+                            had_failure = True
+                            outcome = (validation_failures[0] if validation_failures else {
+                                "pdf_path": str(pdf_path),
+                                "status": "failed",
+                                "reason": "output_page_coverage_validation_failed",
+                            })
+                            record["status"] = "failed"
+                            record["failure"] = outcome
                 except Exception as exc:  # noqa: BLE001
-                    record["page_count_warning"] = f"{type(exc).__name__}: {exc}"
+                    failed = True
+                    had_failure = True
+                    record["status"] = "failed"
+                    record["failure"] = {
+                        "pdf_path": str(pdf_path),
+                        "status": "failed",
+                        "reason": "output_page_coverage_validation_error",
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
             records.append(record)
             _write_latency_records(Path(record_path), records)
             if failed and (fail_fast or callback_error is not None):

@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "id": "receipt",
+      "file": "receipt.jpg",
+      "title": "购物小票",
+      "desc": "真实票据 · 文本与金额",
+      "image": "/example_pics/receipt.jpg"
+    },
+    {
+      "id": "formula",
+      "file": "dense-equations.jpg",
+      "title": "论文公式",
+      "desc": "密集公式 · 多行推导",
+      "image": "/example_pics/dense-equations.jpg"
+    },
+    {
+      "id": "qianziwen",
+      "file": "qianziwen.jpeg",
+      "title": "行书千字文",
+      "desc": "古籍书法 · 竖排文字",
+      "image": "/example_pics/qianziwen.jpeg"
+    }
+  ]
+}

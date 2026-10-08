@@ -117,6 +117,32 @@ modelscope download \
   --local_dir "$GDB_MODEL_ROOT/Qianfan-OCR"
 ```
 
+### TeleOCR
+
+GlobalDocBench 使用官方 `StarDoc-AI/TeleOCR` checkpoint，保存为与方法版本表一致的
+`models/TeleOCR`；源码和 `TeleOCR-vllm` 插件由 `third_party/methods/TeleOCR` 提供。
+
+```bash
+hf download StarDoc-AI/TeleOCR \
+  --repo-type model \
+  --local-dir "$GDB_MODEL_ROOT/TeleOCR"
+```
+
+### LightOnOCR-2-1B
+
+GlobalDocBench 使用官方 `lightonai/LightOnOCR-2-1B` checkpoint：
+
+```bash
+hf download lightonai/LightOnOCR-2-1B \
+  --repo-type model \
+  --local-dir "$GDB_MODEL_ROOT/LightOnOCR-2-1B"
+```
+
+模型卡提供 Transformers 5.x 和 vLLM 两条官方调用方式，但没有独立的完整模型源码仓库。
+当前正式 adapter 使用 vLLM 单页请求，服务参数和生成参数见
+`environments/gdb_lightonocr2.md`。每个请求只包含一张页面图片，不登记整篇 PDF 的
+joint 路线；P 表示跨 PDF 的页面在途数。
+
 ### PaddleOCR-VL 1.5 与 1.6
 
 ```bash

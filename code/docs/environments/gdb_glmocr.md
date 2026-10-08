@@ -11,6 +11,13 @@ GLM-OCR 常驻 self-hosted SDK、PP-DocLayoutV3 布局模型和 vLLM 识别服�
 - 已知例外：xgrammar0.2.4 的元数据要求 Transformers<5；隔离 `pip check` 仅报告这一条冲突（退出1）。已有真实 GPU 验证，不等于所有功能均兼容，也不能写成无冲突。
 - 保持独立环境，不与使用旧 Transformers 的方法合并；不要为了消除告警卸载 xgrammar 或 CUDA 依赖。
 
+## 被复用的方法
+
+LightOnOCR-2-1B 的 vLLM page-pool adapter 也复用此环境，不额外安装或升级依赖。
+LightOnOCR-2 的官方推理参数、PDF 预处理和 benchmark 规则见
+[吞吐协议](../THROUGHPUT_TUNING_PROTOCOL.md)；复用关系和最小 import 检查见
+[gdb_lightonocr2.md](gdb_lightonocr2.md)。
+
 ## 恢复已验证环境
 
 以下用于**新的 Linux x86_64 环境和干净源码目录**，不要在现有带补丁 checkout 上重复 sync。

@@ -32,6 +32,8 @@ def validate_completed_page_counts(method, input_root, output_root, pdf_paths):
                 validate_qianfan_joint_metrics(metrics, expected)
             elif method == "unlimited_ocr_sglang":
                 validate_unlimited_metrics(metrics, expected)
+            elif method == "teleocr_vllm_async":
+                validate_teleocr_metrics(metrics, expected)
             elif type(metrics["page_count"]) is not int or metrics["page_count"] != expected or not isinstance(metrics["pages"], list) or len(metrics["pages"]) != expected:
                 raise ValueError(f"Input has {expected} pages, output reports {metrics['page_count']} pages / {len(metrics['pages'])} page records")
             counts[path] = expected
@@ -167,6 +169,21 @@ def validate_unlimited_metrics(metrics: dict[str, Any], expected: int) -> None:
           or metrics["page_boundary_source"] != "model_page_tokens"
           or [p["page_index"] for p in metrics["pages"]] != list(range(1, expected + 1))):
         raise ValueError("Unlimited page view metadata mismatch")
+
+
+def validate_teleocr_metrics(metrics: dict[str, Any], expected: int) -> None:
+    if metrics.get("method_id") != "teleocr_vllm_async":
+        raise ValueError("TeleOCR method id mismatch")
+    if metrics.get("execution_profile") != "teleocr_vllm_async":
+        raise ValueError("TeleOCR execution profile mismatch")
+    if metrics.get("backend") != "vllm-async-engine":
+        raise ValueError("TeleOCR backend mismatch")
+    if metrics.get("input_page_count") != expected or metrics.get("page_count") != expected:
+        raise ValueError("TeleOCR input/output page count mismatch")
+    if metrics.get("recognized_page_count") != expected:
+        raise ValueError("TeleOCR recognized page count mismatch")
+    if type(metrics.get("max_concurrency")) is not int or metrics["max_concurrency"] < 1:
+        raise ValueError("TeleOCR max_concurrency must be a positive integer")
 
 
 def iter_doc_dirs(method_root: Path) -> list[Path]:

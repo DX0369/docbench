@@ -92,6 +92,13 @@ def parse_args() -> argparse.Namespace:
         help="Comma-separated method ids. Defaults to all validated vLLM methods.",
     )
     parser.add_argument("--skip-existing", action="store_true")
+    from config.execution_profiles import RUNTIME_ARGUMENTS
+    for key, typ, default in RUNTIME_ARGUMENTS["teleocr"]:
+        choices = {"teleocr_backend": ("vllm-async-engine",), "teleocr_layout_mode": ("Detection",)}
+        parser.add_argument("--" + key.replace("_", "-"), type=typ, default=default,
+                            **({"choices": choices[key]} if key in choices else {}))
+    parser.add_argument("--teleocr-max-concurrency", type=int, default=100,
+                        help="Official default 100; fixed-P and sweep instead use --pressure.")
     parser.add_argument("--monkey-region-concurrency", type=int, default=64,
                         help="vllm_async in-flight region limit; pressure sweeps override this value.")
     parser.add_argument("--hunyuan-runner-env", default="gdb_hunyuan")
@@ -421,6 +428,8 @@ def run_method_across_gpus(
     gpus: list[int],
     args: argparse.Namespace,
 ) -> list[dict[str, object]]:
+    if method_id == "teleocr_vllm_async" and len(gpus) != 1:
+        raise ValueError("TeleOCR requires one resident worker on one GPU per invocation")
     if method_id == "deepseek_ocr2" and len(gpus) != 1:
         raise ValueError("DeepSeek page_pool requires one GPU per invocation/service")
     if method_id == "unlimited_ocr_sglang" and len(gpus) != 1:

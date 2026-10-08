@@ -61,6 +61,12 @@ from methods.unlimited_ocr.commands import (
     healthcheck_url as unlimited_ocr_sglang_healthcheck_url,
 )
 from methods.youtu.commands import build_worker as build_youtu_worker
+from methods.teleocr.commands import build_worker as build_teleocr_worker
+from methods.lightonocr2.commands import (
+    build_service as build_lightonocr2_service,
+    build_worker as build_lightonocr2_worker,
+    healthcheck_url as lightonocr2_healthcheck_url,
+)
 from methods.marker.commands import build_worker as build_marker_worker
 from methods.pp_structurev3.commands import build_worker as build_ppstructure_worker
 from methods.mineru_popo.commands import build_worker as build_mineru_popo_worker
@@ -110,6 +116,27 @@ def managed_service_identity(method_id: str, command: list[str], port: int) -> d
 
 
 SERVICE_TASKS: dict[str, ServiceTask] = {
+    "teleocr_vllm_async": ServiceTask(
+        method_id="teleocr_vllm_async",
+        runner_env="gdb_teleocr",
+        worker_builder=build_teleocr_worker,
+        docs_per_job=1,
+        env_overrides={"PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+                       "TOKENIZERS_PARALLELISM": "false"},
+    ),
+    "lightonocr2_1b": ServiceTask(
+        method_id="lightonocr2_1b",
+        runner_env="gdb_glmocr",
+        worker_builder=build_lightonocr2_worker,
+        service_builder=build_lightonocr2_service,
+        healthcheck_builder=lightonocr2_healthcheck_url,
+        docs_per_job=1,
+        env_overrides={
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TOKENIZERS_PARALLELISM": "false",
+        },
+    ),
     "hunyuanocr_10": ServiceTask(
         method_id="hunyuanocr_10",
         runner_env="gdb_hunyuan",

@@ -7,6 +7,18 @@
 /tmp/
 /experiments/
 /reports/
+/archive/
+
+# Large upstream demo assets are not part of the benchmark source snapshot
+/third_party/methods/hunyuanocr/benchmarks/CHAOS-Bench/CHAOS-Bench.zip
+/third_party/methods/monkeyocr/asserts/Visualization.GIF
+/third_party/methods/paddleocr/docs/datasets/images/20210816_210413.gif
+/third_party/methods/paddleocr/docs/images/ppstructure-20240708082235651.gif
+/third_party/methods/paddleocr/docs/version2.x/legacy/images/197918203-c7d46f8a-75d4-47f9-9687-405ee0d6727e.gif
+/third_party/methods/paddleocr/docs/version2.x/ppstructure/images/ppstructure.gif
+/third_party/methods/qianfan_vl/docs/images/video_understanding.mp4
+/third_party/methods/qianfan_vl/docs/images/video_undertanding.mp4
+/third_party/methods/unlimited_ocr/assets/long-horizon-ocr.gif
 
 # Python-generated files
 __pycache__/

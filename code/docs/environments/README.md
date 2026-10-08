@@ -144,6 +144,8 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 | `gdb_monkey` | MonkeyOCR Pro-3B / Pro-1.2B vllm_async + PP-DocLayout | 3.10 | Torch 2.7.0 cu126；vLLM 0.9.1；Transformers 4.51.0；NumPy <2 | 官方 vLLM 分支 + 项目兼容约束/裁剪 |
 | `gdb_deepseek_ocr2` | DeepSeek-OCR-2 | 3.12.9 | Torch 2.6.0+cu124；vLLM 0.8.5；Transformers 4.46.3 | 官方核心版本＋项目cu124组合；保留两项已记录冲突 |
 | `gdb_qianfan` | Qianfan OCR / think | 3.10 | Torch 2.10.0 cu128；Transformers 4.57.6；vLLM 0.18.1 | 官方未锁版本；项目已验证版本 |
+| `gdb_teleocr` | TeleOCR vllm-async-engine | 3.10 | Torch 2.8.0；Transformers 4.57.1；vLLM 0.11.0；xformers 0.0.32 | 官方 requirements/插件；排除可选 Gradio UI 冲突依赖 |
+| `gdb_glmocr`（LightOnOCR-2 复用） | GLM-OCR；LightOnOCR-2-1B vLLM page pool | 3.10 | Torch 2.11.0；Transformers 5.14.1；vLLM 0.20.0；Pillow；pypdfium2 5.12.1 | LightOnOCR-2 不重复安装依赖；当前不创建独立环境 |
 | `gdb_unlimited_ocr_sglang` | Unlimited OCR 官方定制SGLang service | 3.12.13 | SGLang dev11416；Torch 2.9.1 cu128；Transformers 5.3.0；FlashInfer 0.6.7.post3 | 官方定制wheel＋SM86补丁；安装见配方，验证范围见smoke，测量见吞吐协议 |
 
 可选比较环境见 [gdb_hunyuan_optional.md](gdb_hunyuan_optional.md)。Hunyuan DFlash 和 native Transformers 与 release vLLM 明确不兼容，不应装进 `gdb_hunyuan`。
@@ -163,6 +165,8 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 - [gdb_monkey.md](gdb_monkey.md)
 - [gdb_deepseek_ocr2.md](gdb_deepseek_ocr2.md)
 - [gdb_qianfan.md](gdb_qianfan.md)
+- [gdb_teleocr.md](gdb_teleocr.md)
+- [gdb_lightonocr2.md](gdb_lightonocr2.md)：说明 LightOnOCR-2 如何复用 `gdb_glmocr`，不重复安装依赖。
 - [gdb_unlimited_ocr_sglang.md](gdb_unlimited_ocr_sglang.md)
 
 ## 安装后的最小核对
@@ -203,7 +207,7 @@ GLM 的特殊 pip 核对方式按其[环境配方](gdb_glmocr.md)执行；不要
 
 1. 基础验证：`gdb_hunyuan`、`gdb_youtu`。
 2. 原生与集成 parser：`gdb_marker`、`gdb_mineru`、`gdb_glmocr`。
-3. 复合 pipeline：`gdb_paddle`、`gdb_paddle_vllm`、`gdb_monkey`。
+3. 复合 pipeline：`gdb_paddle`、`gdb_paddle_vllm`、`gdb_monkey`、`gdb_teleocr`。
 4. 高风险兼容栈：`gdb_deepseek_ocr2`、`gdb_qianfan`。
 5. Unlimited-OCR 当前只保留 `gdb_unlimited_ocr_sglang` 正式路线；使用项目200 DPI、
    常驻整文档客户端。旧 `gdb_unlimited_ocr` 环境/锁保留，但不再进入当前readiness和调度器；
