@@ -128,6 +128,21 @@ hf download StarDoc-AI/TeleOCR \
   --local-dir "$GDB_MODEL_ROOT/TeleOCR"
 ```
 
+### Jina-OCR-v1
+
+官方 checkpoint `jinaai/jina-ocr-v1`，当前已下载到 `models/jina-ocr-v1`。
+FastMTP 复用同一 checkpoint；必须保留模型目录内官方 Python 文件，不能只复制权重。
+清除代理后使用镜像与可续传下载：
+
+```bash
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+    -u http_proxy -u https_proxy -u all_proxy \
+    HF_ENDPOINT=https://hf-mirror.com \
+    hf download jinaai/jina-ocr-v1 --local-dir "$GDB_ROOT/models/jina-ocr-v1"
+```
+
+当前 adapter 仅单页路线、严格 benchmark prompt；GPU 3 的同步/P1/P2/latency smoke 已通过。
+
 ### LightOnOCR-2-1B
 
 GlobalDocBench 使用官方 `lightonai/LightOnOCR-2-1B` checkpoint：

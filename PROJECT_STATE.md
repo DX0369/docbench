@@ -1,12 +1,25 @@
 # 项目状态
 
-更新时间：2026-10-08 21:21 +08:00
+更新时间：2026-10-08 23:46 +08:00
 
 ## 当前阶段
 
 项目已完成主要方法、模型、第三方源码、隔离环境和 adapter 的整理，代码入口和输出协议已完成一次定版精简。当前处于正式吞吐实验前的有限验证阶段：先核对统一入口、计时和失败记录，再决定各方法的固定吞吐配置。当前不计算 GT 或 scorer，也不把已有小规模结果宣称为最终最优。
 
 ## 已完成
+
+- Jina-OCR-v1 `jina_ocr_v1` 已在 GPU 3 完成官方同步单页和两文档 P1/P2/latency smoke：中文试卷、英文杂志各 2 页，各轮输出校验 2/2 通过，无执行失败。固定严格 benchmark prompt、FastMTP eagle K=3，复用未改包的 DFlash 环境。修复仅涉及启动工具路径（conda run/ninja、CUDA 12.8）和 spawned worker 调用官方 register；不修改模型或环境源码。P1/P2 ready 后处理 29.16/21.95 秒，吞吐 0.137/0.182 页/秒；latency 中文→英文 24.20/7.82 秒、页面并发1。GPU 3 恢复18 MiB；未正式调参，不宣称全量稳定性或最优。一轮一次性产物核对后清理，仅保留结论。
+
+### Jina-OCR-v1 已验证范围
+
+- 官方同步单页 FastMTP；
+- GlobalDocBench adapter P1；
+- GlobalDocBench adapter P2；
+- latency 顺序文档。
+
+以上使用中文试卷和英文杂志两份 PDF，共 4 页；三轮输出校验均为 2/2
+通过，无文档执行失败。该结果只证明环境、模型加载、FastMTP、adapter 和
+输出链路可用，不代表正式吞吐最优，也不替代完整吞吐调参。
 
 - 正式方法和执行路线已登记在 [`code/config/methods.json`](code/config/methods.json)，源码与模型绑定由方法版本清单和源码锁维护。
 - MinerU 3.0.3/2509、MinerU 3.4.x/2605、Hunyuan AR/DFlash、Unlimited SGLang 等版本已拆分为显式 method ID；兼容源码和精确历史源码已区分记录。
@@ -27,6 +40,7 @@
 
 | 方法族/路线 | 当前状态 |
 | --- | --- |
+| Jina-OCR-v1 | 官方严格 prompt、单常驻 FastMTP page pool 和 latency 已通过 GPU 3 两文档 smoke；复用 DFlash 环境，未正式调参。 |
 | Marker、PP-StructureV3、PaddleOCR-VL、GLM-OCR、DeepSeek-OCR-2、Youtu | 已有正式入口和 smoke/dry-run 结论；最终吞吐 profile 尚未统一选定。 |
 | MonkeyOCR 两个版本 | async 路线已通过固定小规模 GPU 验证；存在内容差异和表格重复等质量 warning，不能据此宣称全局最优。 |
 | Qianfan 普通/think | 已收束为官方单页基础 prompt + page_pool；普通/think 共用服务，P 映射页面在途数。旧 joint 结果仅作历史证据，不再属于正式调度。 |

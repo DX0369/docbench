@@ -136,6 +136,23 @@
   ],
   "variants": [
     {
+      "method_id": "jina_ocr_v1",
+      "family_id": "jina_ocr",
+      "display_name": "Jina-OCR-v1",
+      "official_checkpoint": "jinaai/jina-ocr-v1",
+      "model_path": "jina-ocr-v1",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": null,
+      "source_binding": "model_only",
+      "adapter_module": "methods.jina_ocr.worker",
+      "conda_environments": ["gdb_hunyuan_dflash"],
+      "benchmark_status": "active",
+      "role": "official_fastmtp_page_backend",
+      "validation_status": "gpu3_sync_p1_p2_latency_smoke_verified",
+      "notes": "Official model-bundled helpers, strict benchmark prompt, FastMTP eagle K=3. Resident AsyncLLM global page pool; worker extension only calls official register in spawned engines. Reuses unchanged DFlash environment and CUDA 12.8 JIT toolkit. GPU3 sync/P1/P2/latency smoke passed, no joint. Known pip check missing torchcodec; no package changes. No formal throughput search."
+    },
+    {
       "method_id": "xiaomi_ocr_0",
       "family_id": "xiaomi_ocr",
       "display_name": "Xiaomi-OCR-0",

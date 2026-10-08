@@ -93,6 +93,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--skip-existing", action="store_true")
     from config.execution_profiles import RUNTIME_ARGUMENTS
+    for key, typ, default in RUNTIME_ARGUMENTS["jina"]:
+        parser.add_argument("--" + key.replace("_", "-"), type=typ, default=default)
+    parser.add_argument("--jina-page-concurrency", type=int, default=1)
     for key, typ, default in RUNTIME_ARGUMENTS["teleocr"]:
         choices = {"teleocr_backend": ("vllm-async-engine",), "teleocr_layout_mode": ("Detection",)}
         parser.add_argument("--" + key.replace("_", "-"), type=typ, default=default,
@@ -431,6 +434,8 @@ def run_method_across_gpus(
     gpus: list[int],
     args: argparse.Namespace,
 ) -> list[dict[str, object]]:
+    if method_id == "jina_ocr_v1" and len(gpus) != 1:
+        raise ValueError("Jina requires one resident runtime on one GPU")
     if method_id == "teleocr_vllm_async" and len(gpus) != 1:
         raise ValueError("TeleOCR requires one resident worker on one GPU per invocation")
     if method_id == "deepseek_ocr2" and len(gpus) != 1:
@@ -496,7 +501,7 @@ def run_method_with_persistent_workers(
     pdf_paths = collect_pdf_paths(Path(args.input_root))
     page_pool = method_id.startswith("hunyuanocr_") or method_id in {"qianfan_ocr", "qianfan_ocr_think"}
     page_pool = page_pool or method_id == "deepseek_ocr2"
-    page_pool = page_pool or method_id == "xiaomi_ocr_0"
+    page_pool = page_pool or method_id in {"xiaomi_ocr_0", "jina_ocr_v1"}
     page_pool = page_pool or (method_id == "unlimited_ocr_sglang" and args.unlimited_ocr_request_mode == "page_pool")
     jobs = [pdf_paths] if page_pool and pdf_paths else chunk_pdf_paths(pdf_paths, config.docs_per_job)
     if not jobs:

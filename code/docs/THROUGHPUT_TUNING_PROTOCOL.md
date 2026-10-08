@@ -1,5 +1,25 @@
 # 吞吐测试协议
 
+## Jina-OCR-v1
+
+- 路线：单常驻 AsyncLLM、全局单页 page pool；不支持整文档 joint。
+- Prompt：固定官方模型卡的严格 benchmark prompt，包含 HTML 表格、LaTeX、
+  忽略图形、删除页眉页脚并保留脚注；完整原文维护于
+  `src/methods/jina_ocr/runtime.py::STRICT_PROMPT`，写入每份文档 metrics。
+  不使用推荐简短 prompt，不在压力搜索中更换 prompt。
+- 官方生成示例：`max_tokens=4096`、temperature 0、repetition penalty 1.05；
+  重复检测 35/35/10。项目沿用这些设置，缺少重复检测支持时显式失败。
+- 官方 FastMTP：同 checkpoint、`eagle`、K=3、递归单 head；项目不另下载 draft，
+  不自动关闭 MTP、不回退 Transformers。
+- 项目设置：200 DPI、context 32768；不设置 max_num_seqs 或 GPU memory fraction。
+- P：跨 PDF 的全局页面渲染/请求在途上限，单 worker、单模型 runtime。
+  Latency：逐 PDF 顺序运行，页面在途上限 1，其他参数相同。
+- 空文本、`length` 正常完成仍算执行成功；真正请求/引擎/写盘失败记录并传播。
+  不保存原始响应、图片资产；不根据模型页标记猜测页归属。
+- 2026-10-08 GPU 3 官方同步单页与两文档 P1/P2/latency smoke 均通过，复用
+  未改包的 DFlash 环境、CUDA 12.8 工具链。P1/P2 处理时间 29.16/21.95 秒，
+  4 页吞吐 0.137/0.182 页/秒；仅链路验证，不作正式排名或最优结论。
+
 本文档是项目唯一的吞吐测试协议，同时保留必要的方法运行机制和实验摘要。环境和模型说明分别见
 [环境配方](environments/README.md) 与 [MODELS.md](MODELS.md)；可复制的运行命令见
 [RUN_COMMANDS.md](RUN_COMMANDS.md)。

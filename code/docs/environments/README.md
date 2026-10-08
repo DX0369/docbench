@@ -1,5 +1,7 @@
 # 方法环境安装配方
 
+Jina-OCR-v1 环境复用说明见 [gdb_jinaocr.md](gdb_jinaocr.md)：已在 DFlash 环境完成 GPU smoke，无包修改。
+
 本目录是环境安装和迁移的唯一入口：本文件维护通用设置，各环境配方维护自己的版本、安装命令和已知问题。运行命令见 [RUN_COMMANDS.md](../RUN_COMMANDS.md)，吞吐规则见 [THROUGHPUT_TUNING_PROTOCOL.md](../THROUGHPUT_TUNING_PROTOCOL.md)。
 
 这些配方不是 lock 文件本身。锁文件统一位于根目录 `env/locks_rtx3090_20260720/`，用途和文件类型见

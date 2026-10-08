@@ -62,6 +62,7 @@ from methods.unlimited_ocr.commands import (
 )
 from methods.youtu.commands import build_worker as build_youtu_worker
 from methods.teleocr.commands import build_worker as build_teleocr_worker
+from methods.jina_ocr.commands import build_worker as build_jina_worker
 from methods.lightonocr2.commands import (
     build_service as build_lightonocr2_service,
     build_worker as build_lightonocr2_worker,
@@ -121,6 +122,11 @@ def managed_service_identity(method_id: str, command: list[str], port: int) -> d
 
 
 SERVICE_TASKS: dict[str, ServiceTask] = {
+    "jina_ocr_v1": ServiceTask(
+        method_id="jina_ocr_v1", runner_env="gdb_hunyuan_dflash",
+        worker_builder=build_jina_worker, docs_per_job=8,
+        env_overrides={"PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+    ),
     "xiaomi_ocr_0": ServiceTask(
         method_id="xiaomi_ocr_0",
         runner_env="gdb_glmocr",

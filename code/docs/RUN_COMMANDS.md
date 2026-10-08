@@ -58,12 +58,14 @@ run_fixed monkeyocr_pro_3b 4
 run_fixed teleocr_vllm_async 1
 run_fixed lightonocr2_1b 1
 run_fixed xiaomi_ocr_0 1
+run_fixed jina_ocr_v1 1             # 复用 DFlash 环境；自动指定 CUDA 12.8 工具链
 ```
 
 当前正式 method ID 和 P 的实际含义如下：
 
 | method ID | execution route | P 控制的参数 |
 | --- | --- | --- |
+| `jina_ocr_v1` | 常驻 AsyncLLM FastMTP page pool | 全局页面在途数 |
 | `hunyuanocr_10` | vLLM AR page pool | 页面在途数 |
 | `hunyuanocr_15` | vLLM AR page pool | 页面在途数 |
 | `hunyuanocr_15_dflash` | vLLM DFlash page pool | 页面在途数 |
@@ -321,6 +323,24 @@ Latency 模式只改变文档之间的调度：runtime/service 只启动一次�
 `latency_profile=official_defaults` 及实际映射。
 每个方法应生成 `latency_summary.json`，记录单文档耗时、处理总时间、启动时间和
 失败文档。Latency 不计算 GT 或 scorer；MinerU-Popo 当前不纳入该协议。
+
+## Jina-OCR-v1
+
+环境见 [gdb_jinaocr](environments/gdb_jinaocr.md)。仅 page pool，不注册 joint。
+固定官方严格 benchmark prompt，FastMTP `eagle` K=3。
+GPU 3 的同步、P1/P2 和 latency smoke 已通过；未正式调参。
+默认复用 DFlash 环境，工具链见环境说明；smoke 的 FlashInfer workspace 也应指向 tmp。
+
+```bash
+run_fixed jina_ocr_v1 4
+run_fixed jina_ocr_v1 1 --latency-mode
+
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods jina_ocr_v1 --pressures 1,2,4,8,16,32,64,128,256 \
+    --gpus "$GPU" --execution-policy serial --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_jina_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
 
 ## 两文档 latency smoke（不属于正式吞吐结果）
 

@@ -23,6 +23,7 @@ PressureKind = Literal[
     "teleocr_request_concurrency",
     "lighton_page_pool",
     "xiaomi_page_pool",
+    "jina_page_pool",
 ]
 
 
@@ -41,6 +42,11 @@ class PressureSpec:
 
 
 PRESSURE_SPECS: dict[str, PressureSpec] = {
+    "jina_ocr_v1": PressureSpec(
+        "jina_ocr_v1", "jina_page_pool",
+        "One resident FastMTP AsyncLLM; P bounds global single-page render/request tasks across PDFs.",
+        primary_pressure="inflight_pages", secondary_pressure=("vllm_capacity", "fixed_fastmtp_k3"),
+    ),
     "xiaomi_ocr_0": PressureSpec(
         "xiaomi_ocr_0", "xiaomi_page_pool",
         "One resident vLLM service; P bounds global single-page render/request tasks across PDFs.",
@@ -192,6 +198,7 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
 
 DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
     "xiaomi_ocr_0",
+    "jina_ocr_v1",
     "teleocr_vllm_async",
     "lightonocr2_1b",
     "hunyuanocr_10",
@@ -267,6 +274,9 @@ def pressure_mapping(method: str, pressure: int,
     elif spec.kind == "lighton_page_pool":
         overrides["lightonocr2_page_concurrency"] = pressure
         outer, docs = 1, None
+    elif spec.kind == "jina_page_pool":
+        overrides["jina_page_concurrency"] = pressure
+        outer, docs = 1, None
     elif spec.kind == "xiaomi_page_pool":
         overrides["xiaomi_page_concurrency"] = pressure
         outer, docs = 1, None
@@ -337,6 +347,11 @@ def latency_mapping(
         primary = "inflight_pages"
         kind = "latency_page_serial"
         notes = "Single-page official route; one PDF and one page request at a time."
+    elif method == "jina_ocr_v1":
+        overrides["jina_page_concurrency"] = 1
+        primary = "inflight_pages"
+        kind = "latency_page_serial"
+        notes = "One PDF and one page request at a time; same strict prompt and FastMTP runtime."
     elif method == "xiaomi_ocr_0":
         overrides["xiaomi_page_concurrency"] = 1
         primary = "inflight_pages"

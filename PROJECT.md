@@ -1,6 +1,6 @@
 # 项目说明
 
-更新时间：2026-10-08 22:05 +08:00
+更新时间：2026-10-08 23:12 +08:00
 
 ## 研究目标与范围
 
@@ -39,6 +39,8 @@ GlobalDocBench 用统一的多页 PDF 输入，比较文档解析方法的准确
 - 不在当前项目状态文档中重复保存方法参数、实验曲线或环境安装细节；这些信息只维护在对应配置和专题文档中。
 
 ## 正式配置位置
+
+Jina-OCR-v1 单页 FastMTP 路线已通过 GPU 3 smoke，复用 DFlash 环境；尚未正式调参。
 
 - `code/config/methods.json`：方法版本与第三方源码的统一清单，记录正式 method ID、模型、环境、adapter，以及仓库 URL、本地目录和精确 revision。
 - `code/src/config/execution_profiles.py`：正式执行路线及运行参数登记。

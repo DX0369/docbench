@@ -272,7 +272,7 @@ def start_vllm_service(
 
 
 def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
-    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0"}:
+    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1"}:
         return True
     if method == "mineru_344_2605_popo":
         return True  # The combination coordinator owns its inner ready/start/done.
@@ -351,6 +351,8 @@ def run_trial(
 ) -> Dict[str, Any]:
     if base_args.latency_mode and method == "mineru_344_2605_popo":
         raise ValueError("MinerU-Popo latency mode is not supported until the colocated services fit the target GPU")
+    if method == "jina_ocr_v1" and (concurrency != 1 or base_args.jina_page_concurrency < 1):
+        raise ValueError("Jina requires one resident worker and positive page concurrency")
     if method == "teleocr_vllm_async" and (concurrency != 1 or base_args.teleocr_max_concurrency < 1):
         raise ValueError("TeleOCR requires one resident worker and positive request concurrency")
     if method == "lightonocr2_1b" and (concurrency != 1 or base_args.lightonocr2_page_concurrency < 1):
@@ -414,7 +416,7 @@ def run_trial(
         if concurrency != 1:
             raise ValueError("Hunyuan page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
-    if method in {"lightonocr2_1b", "xiaomi_ocr_0"}:
+    if method in {"lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1"}:
         if concurrency != 1:
             raise ValueError(f"{method} page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)

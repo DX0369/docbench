@@ -31,6 +31,10 @@ class ExecutionProfile:
 
 EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
     ExecutionProfile(
+        "jina_ocr_v1_vllm_fastmtp_page_pool", "jina_ocr_v1", "integrated_parser_runtime",
+        "jina_page_pool", ("Jina-OCR-v1 resident AsyncLLM with FastMTP K=3",),
+    ),
+    ExecutionProfile(
         "xiaomi_ocr_0_vllm_page_pool", "xiaomi_ocr_0", "exclusive_model_service",
         "xiaomi_page_pool", ("Xiaomi-OCR-0 vLLM service",),
     ),
@@ -179,6 +183,7 @@ EXECUTION_PROFILE_BY_ID = {
 }
 
 DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
+    "jina_ocr_v1": "jina_ocr_v1_vllm_fastmtp_page_pool",
     "xiaomi_ocr_0": "xiaomi_ocr_0_vllm_page_pool",
     "teleocr_vllm_async": "teleocr_vllm_async",
     "lightonocr2_1b": "lightonocr2_vllm_page_pool",
@@ -245,6 +250,13 @@ def resolve_execution_profile(
 # Non-P options only. Both throughput entrypoints use this same declaration;
 # per-method profiles cannot accumulate unrelated methods' options.
 RUNTIME_ARGUMENTS = {
+    "jina": [
+        ("jina_env", str, "gdb_hunyuan_dflash"),
+        ("jina_cuda_home", str, str(Path.home() / "software/cuda-envs/cuda-12.8")),
+        ("jina_flashinfer_workspace", str, None),
+        ("jina_model_path", str, None), ("jina_dpi", int, 200),
+        ("jina_max_tokens", int, 4096), ("jina_max_model_len", int, 32768),
+    ],
     "xiaomi": [
         ("xiaomi_env", str, "gdb_glmocr"),
         ("xiaomi_model_path", str, None),
@@ -335,7 +347,7 @@ def runtime_keys(method):
         groups = {"deepseek_ocr2": ("deepseek",), "glmocr": ("glm",), "youtu": ("youtu",),
                   "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": (),
                   "teleocr_vllm_async": ("teleocr",),
-                  "xiaomi_ocr_0": ("xiaomi",),
+                  "xiaomi_ocr_0": ("xiaomi",), "jina_ocr_v1": ("jina",),
                   "lightonocr2_1b": ("lightonocr2",)}[method]
     keys = tuple(key for group in groups for key, _, _ in RUNTIME_ARGUMENTS[group])
     if method == "hunyuanocr_15_dflash":
@@ -365,7 +377,13 @@ def runtime_cli_args(args, method):
 
 
 def resolve_runtime_defaults(args, method):
-    if method == "xiaomi_ocr_0":
+    if method == "jina_ocr_v1":
+        from config.method_versions import get_method_version
+        args.jina_model_path = str(Path(args.jina_model_path).expanduser().resolve()
+            if args.jina_model_path else get_method_version(method).model_path)
+        if args.jina_dpi < 1 or args.jina_max_tokens < 1 or args.jina_max_model_len <= args.jina_max_tokens:
+            raise ValueError("Jina requires positive DPI/tokens and context greater than generation limit")
+    elif method == "xiaomi_ocr_0":
         from config.method_versions import get_method_version
         args.xiaomi_model_path = str(Path(args.xiaomi_model_path).expanduser().resolve()
             if args.xiaomi_model_path else get_method_version(method).model_path)
