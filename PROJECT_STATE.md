@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-08 19:45 +08:00
+更新时间：2026-10-08 21:21 +08:00
 
 ## 当前阶段
 
@@ -35,6 +35,7 @@
 | Unlimited-OCR SGLang | joint/page_pool 路线已接入并通过有界 smoke；使用 RTX 3090 SM86 兼容补丁，性能不能描述为原封不动的官方实现。 |
 | TeleOCR | `teleocr_vllm_async` 常驻 async adapter、统一输出和 P 映射已接入；GPU 6 上单文档吞吐与双文档 latency smoke 已通过，尚未进行正式吞吐搜索。 |
 | LightOnOCR-2-1B | `lightonocr2_1b` 官方 vLLM 单页 page-pool adapter 已接入；GPU 2 上 P1/P2 有界 smoke 通过，尚未完成正式吞吐调参。 |
+| Xiaomi-OCR-0 | `xiaomi_ocr_0` 仅整页路线，200 DPI、官方 RGB/2048px 编码和 Markdown 后处理；复用 `gdb_glmocr`，无依赖安装或源码/模型补丁。2026-10-08 21:21 +08:00，GPU 6 中文试卷 `exam_zh_2014______________0_2`、英文杂志 `magazine_en_The_New_Yorker-2025-12-15_68_70` 各 2 页，P1/P2/latency 各一次全部完成，输出校验均 2/2 通过、4 页覆盖完整。P1/P2 处理耗时 19.73/12.93 秒、吞吐 0.203/0.309 页/秒；延迟按中文→英文顺序，9.48/6.14 秒，单页并发 1。启动耗时分别 216.57/164.85/88.54 秒，首次编译/缓存影响未控制，不作为正式性能结论。只有非致命 NIXL/弃用和退出 semaphore warning；无 OOM、请求失败或残留 GPU 进程，GPU 恢复约 18 MiB。本轮一次性产物清理，仅保留结论；未正式调参，不登记 region/joint。 |
 | MinerU-Popo | 组合 adapter 和常驻路径已接入；双模型稳定容量、跨页表格和图文关联仍待验证，暂不调参。 |
 
 ## 已知限制

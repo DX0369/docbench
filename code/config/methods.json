@@ -4,6 +4,14 @@
   "note": "Repositories pin runtime checkout revisions once. Variants reference source_repository_id; historical_source_revision and source_binding distinguish historical provenance from compatibility source. Local patch requirements remain recorded in notes.",
   "repositories": [
     {
+      "id": "xiaomi_ocr",
+      "path": "third_party/methods/Xiaomi-OCR-0",
+      "url": "https://github.com/SeerRay-Lab/Xiaomi-OCR-0.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "d72f759e58c07266135f718edd6daca86b5444a5"
+    },
+    {
       "id": "teleocr",
       "path": "third_party/methods/TeleOCR",
       "url": "https://github.com/caipeng328/TeleOCR.git",
@@ -127,6 +135,23 @@
     }
   ],
   "variants": [
+    {
+      "method_id": "xiaomi_ocr_0",
+      "family_id": "xiaomi_ocr",
+      "display_name": "Xiaomi-OCR-0",
+      "official_checkpoint": "SeerRay-Lab/Xiaomi-OCR-0",
+      "model_path": "Xiaomi-OCR-0",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "xiaomi_ocr",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.xiaomi_ocr.commands",
+      "conda_environments": ["gdb_glmocr"],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "gpu6_2pdf_p1_p2_latency_smoke_verified",
+      "notes": "Official batch whole-page prompt, RGB/2048px encoding and Markdown postprocessing; no region or joint route. One resident vLLM service, global page pool; P bounds page render/request tasks across PDFs. Latency serializes PDFs and page requests. Reuses gdb_glmocr without dependency changes. Project PDF rendering is 200 DPI and service context is 32768; official batch generation is 16384 tokens, temperature 0, top_p 0.8, thinking disabled, request timeout 600 seconds. Empty/length responses follow project execution-success policy; real errors propagate. GPU 6 startup, P1/P2 and sequential latency smoke passed on two PDFs/four pages; no final throughput tuning claim."
+    },
     {
       "method_id": "teleocr_vllm_async",
       "family_id": "teleocr",

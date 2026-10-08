@@ -99,6 +99,10 @@ def parse_args() -> argparse.Namespace:
                             **({"choices": choices[key]} if key in choices else {}))
     parser.add_argument("--teleocr-max-concurrency", type=int, default=100,
                         help="Official default 100; fixed-P and sweep instead use --pressure.")
+    for key, typ, default in RUNTIME_ARGUMENTS["xiaomi"]:
+        parser.add_argument("--" + key.replace("_", "-"), type=typ, default=default)
+    parser.add_argument("--xiaomi-page-concurrency", type=int, default=8,
+                        help="Official batch client default 8; benchmark entrypoints use --pressure.")
     parser.add_argument("--monkey-region-concurrency", type=int, default=64,
                         help="vllm_async in-flight region limit; pressure sweeps override this value.")
     parser.add_argument("--hunyuan-runner-env", default="gdb_hunyuan")
@@ -431,6 +435,8 @@ def run_method_across_gpus(
         raise ValueError("TeleOCR requires one resident worker on one GPU per invocation")
     if method_id == "deepseek_ocr2" and len(gpus) != 1:
         raise ValueError("DeepSeek page_pool requires one GPU per invocation/service")
+    if method_id == "xiaomi_ocr_0" and len(gpus) != 1:
+        raise ValueError("Xiaomi page_pool requires one GPU per invocation/service")
     if method_id == "unlimited_ocr_sglang" and len(gpus) != 1:
         raise ValueError("Unlimited-OCR requires one GPU per invocation/service")
     if (method_id.startswith("hunyuanocr_") or method_id in {"qianfan_ocr", "qianfan_ocr_think"}) and len(gpus) != 1:
@@ -490,6 +496,7 @@ def run_method_with_persistent_workers(
     pdf_paths = collect_pdf_paths(Path(args.input_root))
     page_pool = method_id.startswith("hunyuanocr_") or method_id in {"qianfan_ocr", "qianfan_ocr_think"}
     page_pool = page_pool or method_id == "deepseek_ocr2"
+    page_pool = page_pool or method_id == "xiaomi_ocr_0"
     page_pool = page_pool or (method_id == "unlimited_ocr_sglang" and args.unlimited_ocr_request_mode == "page_pool")
     jobs = [pdf_paths] if page_pool and pdf_paths else chunk_pdf_paths(pdf_paths, config.docs_per_job)
     if not jobs:

@@ -22,6 +22,7 @@ PressureKind = Literal[
     "marker_shared_workers",
     "teleocr_request_concurrency",
     "lighton_page_pool",
+    "xiaomi_page_pool",
 ]
 
 
@@ -40,6 +41,12 @@ class PressureSpec:
 
 
 PRESSURE_SPECS: dict[str, PressureSpec] = {
+    "xiaomi_ocr_0": PressureSpec(
+        "xiaomi_ocr_0", "xiaomi_page_pool",
+        "One resident vLLM service; P bounds global single-page render/request tasks across PDFs.",
+        primary_pressure="inflight_pages",
+        secondary_pressure=("vllm_capacity", "outer_workers_fixed_1"),
+    ),
     "teleocr_vllm_async": PressureSpec(
         "teleocr_vllm_async", "teleocr_request_concurrency",
         "One resident async runtime; P bounds shared layout/region requests within the current PDF, not pages. Documents remain sequential.",
@@ -184,6 +191,7 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
 
 
 DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
+    "xiaomi_ocr_0",
     "teleocr_vllm_async",
     "lightonocr2_1b",
     "hunyuanocr_10",
@@ -259,6 +267,9 @@ def pressure_mapping(method: str, pressure: int,
     elif spec.kind == "lighton_page_pool":
         overrides["lightonocr2_page_concurrency"] = pressure
         outer, docs = 1, None
+    elif spec.kind == "xiaomi_page_pool":
+        overrides["xiaomi_page_concurrency"] = pressure
+        outer, docs = 1, None
     elif spec.kind == "pp_page_batch":
         overrides["pp_batch_scale"] = pressure
     elif spec.kind == "marker_shared_workers":
@@ -326,6 +337,11 @@ def latency_mapping(
         primary = "inflight_pages"
         kind = "latency_page_serial"
         notes = "Single-page official route; one PDF and one page request at a time."
+    elif method == "xiaomi_ocr_0":
+        overrides["xiaomi_page_concurrency"] = 1
+        primary = "inflight_pages"
+        kind = "latency_page_serial"
+        notes = "Official Xiaomi whole-page route; one PDF and one page request at a time."
     elif method.startswith("monkeyocr_"):
         overrides["monkey_region_concurrency"] = 64
         primary = "inflight_regions_default"

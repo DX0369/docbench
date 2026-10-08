@@ -138,7 +138,7 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 | `gdb_mineru` | MinerU 3.4.x/2605 API/direct；Popo vLLM服务 | 3.10 | MinerU 3.4.3；Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 官方范围 + 项目已验证版本；Popo单服务及双服务小smoke通过，20文档仍有容量/上下文/建树失败 |
 | `gdb_mineru_303` | MinerU 3.0.3/2509 API/direct | 3.10 | Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 原始路线显式版本；API/direct 单页 smoke |
 | `gdb_mineru_popo` | MinerU-Popo CPU API客户端/后处理，保留历史TF依赖 | 3.10 | 原Torch/Transformers不变；新增loguru 0.7.3 | CPU导入及组合小smoke通过；20文档P=1/2/4未全通过，尚无稳定配置 |
-| `gdb_glmocr` | GLM-OCR service/pipeline | 3.10 | Torch 2.11.0 cu130；Transformers 5.14.1；vLLM 0.20.0 | 官方下界 + 项目已验证版本；已知 xgrammar 冲突 |
+| `gdb_glmocr` | GLM-OCR service/pipeline；LightOnOCR-2-1B、Xiaomi-OCR-0 service/worker | 3.10 | Torch 2.11.0 cu130；Transformers 5.14.1；vLLM 0.20.0 | 官方下界 + 项目已验证版本；已知 xgrammar 冲突 |
 | `gdb_paddle` | PP-StructureV3、PaddleOCR-VL pipeline/client | 3.10 | PaddlePaddle GPU 3.2.1 cu126；PaddleX 3.7.x | 官方精确/范围约束 |
 | `gdb_paddle_vllm` | PaddleOCR-VL vLLM service | 3.10 | Torch 2.8.0 cu128；Transformers 4.57.6；vLLM 0.10.2 | 官方动态配方 + 项目已验证解析结果 |
 | `gdb_monkey` | MonkeyOCR Pro-3B / Pro-1.2B vllm_async + PP-DocLayout | 3.10 | Torch 2.7.0 cu126；vLLM 0.9.1；Transformers 4.51.0；NumPy <2 | 官方 vLLM 分支 + 项目兼容约束/裁剪 |
@@ -167,6 +167,7 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 - [gdb_qianfan.md](gdb_qianfan.md)
 - [gdb_teleocr.md](gdb_teleocr.md)
 - [gdb_lightonocr2.md](gdb_lightonocr2.md)：说明 LightOnOCR-2 如何复用 `gdb_glmocr`，不重复安装依赖。
+- [gdb_xiaomi_ocr.md](gdb_xiaomi_ocr.md)：Xiaomi-OCR-0 服务和 worker 复用 `gdb_glmocr`；依赖来源、恢复链接与迁移检查。
 - [gdb_unlimited_ocr_sglang.md](gdb_unlimited_ocr_sglang.md)
 
 ## 安装后的最小核对

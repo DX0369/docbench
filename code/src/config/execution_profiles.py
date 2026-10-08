@@ -31,6 +31,10 @@ class ExecutionProfile:
 
 EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
     ExecutionProfile(
+        "xiaomi_ocr_0_vllm_page_pool", "xiaomi_ocr_0", "exclusive_model_service",
+        "xiaomi_page_pool", ("Xiaomi-OCR-0 vLLM service",),
+    ),
+    ExecutionProfile(
         "teleocr_vllm_async", "teleocr_vllm_async", "integrated_parser_runtime",
         "teleocr_request_concurrency", ("TeleOCR resident AsyncLLM layout/recognition model",),
     ),
@@ -175,6 +179,7 @@ EXECUTION_PROFILE_BY_ID = {
 }
 
 DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
+    "xiaomi_ocr_0": "xiaomi_ocr_0_vllm_page_pool",
     "teleocr_vllm_async": "teleocr_vllm_async",
     "lightonocr2_1b": "lightonocr2_vllm_page_pool",
     "mineru_344_2605_popo": "mineru_344_2605_popo_vllm_services",
@@ -240,6 +245,13 @@ def resolve_execution_profile(
 # Non-P options only. Both throughput entrypoints use this same declaration;
 # per-method profiles cannot accumulate unrelated methods' options.
 RUNTIME_ARGUMENTS = {
+    "xiaomi": [
+        ("xiaomi_env", str, "gdb_glmocr"),
+        ("xiaomi_model_path", str, None),
+        ("xiaomi_dpi", int, 200),
+        ("xiaomi_max_tokens", int, 16384),
+        ("xiaomi_max_model_len", int, 32768),
+    ],
     "teleocr": [("teleocr_env", str, "gdb_teleocr"),
         ("teleocr_model_path", str, None), ("teleocr_backend", str, "vllm-async-engine"),
         ("teleocr_layout_mode", str, "Detection"), ("teleocr_max_model_len", int, 16384),
@@ -323,6 +335,7 @@ def runtime_keys(method):
         groups = {"deepseek_ocr2": ("deepseek",), "glmocr": ("glm",), "youtu": ("youtu",),
                   "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": (),
                   "teleocr_vllm_async": ("teleocr",),
+                  "xiaomi_ocr_0": ("xiaomi",),
                   "lightonocr2_1b": ("lightonocr2",)}[method]
     keys = tuple(key for group in groups for key, _, _ in RUNTIME_ARGUMENTS[group])
     if method == "hunyuanocr_15_dflash":
@@ -352,7 +365,15 @@ def runtime_cli_args(args, method):
 
 
 def resolve_runtime_defaults(args, method):
-    if method == "teleocr_vllm_async":
+    if method == "xiaomi_ocr_0":
+        from config.method_versions import get_method_version
+        args.xiaomi_model_path = str(Path(args.xiaomi_model_path).expanduser().resolve()
+            if args.xiaomi_model_path else get_method_version(method).model_path)
+        if args.xiaomi_dpi < 1 or args.xiaomi_max_tokens < 1:
+            raise ValueError("Xiaomi DPI and generation limit must be positive")
+        if args.xiaomi_max_model_len <= args.xiaomi_max_tokens:
+            raise ValueError("Xiaomi context must exceed the generation limit to leave room for input")
+    elif method == "teleocr_vllm_async":
         from config.method_versions import get_method_version
         args.teleocr_model_path = str(Path(args.teleocr_model_path).expanduser().resolve()
             if args.teleocr_model_path else get_method_version(method).model_path)

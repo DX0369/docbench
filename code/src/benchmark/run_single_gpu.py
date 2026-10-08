@@ -235,7 +235,7 @@ def start_vllm_service(
     env_overrides.update(method_spec.env_overrides)
     disable_dynamo = (args.hunyuan_vllm_enforce_eager if method in AR_GPU_MEMORY_DEFAULTS
                       else method != "hunyuanocr_15_dflash")
-    if method in {"deepseek_ocr2", "glmocr", "lightonocr2_1b"} or method in MINERU_PROFILES:
+    if method in {"deepseek_ocr2", "glmocr", "lightonocr2_1b", "xiaomi_ocr_0"} or method in MINERU_PROFILES:
         # Preserve the official model/vLLM compilation defaults.
         disable_dynamo = False
     if method in {"paddleocr_vl_15", "paddleocr_vl_16"}:
@@ -272,7 +272,7 @@ def start_vllm_service(
 
 
 def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
-    if method in {"teleocr_vllm_async", "lightonocr2_1b"}:
+    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0"}:
         return True
     if method == "mineru_344_2605_popo":
         return True  # The combination coordinator owns its inner ready/start/done.
@@ -355,6 +355,8 @@ def run_trial(
         raise ValueError("TeleOCR requires one resident worker and positive request concurrency")
     if method == "lightonocr2_1b" and (concurrency != 1 or base_args.lightonocr2_page_concurrency < 1):
         raise ValueError("LightOnOCR-2 requires one resident worker and positive page concurrency")
+    if method == "xiaomi_ocr_0" and (concurrency != 1 or base_args.xiaomi_page_concurrency < 1):
+        raise ValueError("Xiaomi requires one resident worker and positive page concurrency")
     if method == "mineru_344_2605_popo":
         if concurrency != 1:
             raise ValueError("Popo requires one coordinator; tune --popo-concurrency")
@@ -412,9 +414,9 @@ def run_trial(
         if concurrency != 1:
             raise ValueError("Hunyuan page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
-    if method == "lightonocr2_1b":
+    if method in {"lightonocr2_1b", "xiaomi_ocr_0"}:
         if concurrency != 1:
-            raise ValueError("LightOnOCR-2 page pool requires one outer worker; use --pressure")
+            raise ValueError(f"{method} page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
     if method in {"qianfan_ocr", "qianfan_ocr_think"}:
         if concurrency != 1:

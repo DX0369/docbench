@@ -74,6 +74,7 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | Youtu native | shared-feature/query | query 分组数 | query 可跨文档供给 |
 | TeleOCR vLLM async | 常驻 AsyncLLM 两阶段页面流水线 | 当前 PDF 内共享的 layout/region 请求信号量 | 文档之间按官方顺序处理 |
 | LightOnOCR-2-1B | 官方 vLLM 单页 VLM + 全局 page pool | 页面在途数 | 页面可跨文档供给；不支持已登记的整文档 joint |
+| Xiaomi-OCR-0 | 官方 batch 整页 VLM + 常驻 vLLM 全局 page pool | 页面渲染／请求在途数 | 单 worker、单服务，页面可跨文档供给；不登记 region 或 joint |
 
 ### 生成长度和上下文参数来源
 
@@ -100,6 +101,15 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | MinerU-Popo | Popo 官方脚本生成上限 8192；未提供固定服务上下文 | Popo 生成 8192；默认 `popo_max_model_len=32768`，仍可显式覆盖 |
 | TeleOCR vLLM async | 官方 `vllm-async-engine`、`MAX_MODEL_LEN=16384`、`GPU_MEMORY_UTILIZATION=0.95`、PDF worker 4；上游 `max_concurrency=100` | backend/layout/PDF worker 保持上述值；P 显式覆盖请求 semaphore；不设置 `max_num_seqs` |
 | LightOnOCR-2-1B | 官方 vLLM 示例：每请求一张图片、`max_tokens=4096`、`temperature=0.2`、`top_p=0.9`；服务参数为 image limit 1、processor cache 0、关闭 prefix caching | 生成 4096；200 DPI、最长边 1540；不显式设置 `max_num_seqs` 或 `max_model_len` |
+| Xiaomi-OCR-0 | 官方 batch e2e：生成 16384、temperature 0、top_p 0.8、presence penalty 0、repetition penalty 1、thinking 关闭、超时 600 秒、RGB 最长边 2048；Demo/MCP 为 4096 输出和 150 DPI，服务示例上下文 16384 | 采用 batch 请求及官方后处理；项目指定 200 DPI、服务上下文 32768；单图请求，`max_num_seqs`、显存比例、引擎 batch 和编译模式沿用默认 |
+
+Xiaomi 直接复用官方 `PROMPTS["document"]`、`encode_image_base64()` 和
+`finalize_document()`，不调用会将空响应判失败的官方 `infer_one()`。
+空响应和 `finish_reason=length` 按统一执行成功规则处理；真实 SDK、结构或写盘
+错误显式记录。不开启官方可选的重复内容重试；OpenAI SDK 默认传输重试保持不变，
+其耗时计入处理时间。临时页面自动清理，不保存原始响应或图片资产。
+CPU/dry-run 与 GPU 6 两文档/四页 P1、P2、逐文档 latency smoke 已通过；
+真实服务可在当前共享环境启动，但不据此宣称全量稳定或吞吐最优。
 
 本节中的硬件安全值不等于官方最大值。特别是 Hunyuan 1.5 的 65536、GLM 的 32768、
 Paddle 的 16384、Unlimited 的 16384 以及 Popo 的 32768，都必须随运行 metadata 记录。
@@ -114,7 +124,7 @@ Qianfan 当前只登记单页 page_pool；旧 joint 结果属于历史诊断，�
 
 ### Latency 参数口径
 
-Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan 和
+Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan、LightOnOCR-2、Xiaomi-OCR-0 和
 Unlimited `page_pool` 使用页面级 `P=1`；其他方法只
 固定一个外层文档客户端。Monkey 使用官方区域并发 64，TeleOCR 使用 async 默认 100，
 Youtu 使用 query batch 5；Paddle 不显式传 `vl_rec_max_concurrency`，GLM 不显式传
@@ -130,6 +140,7 @@ latency 标识，不代表所有内部并发均为 1。
 | 方法 | 已测范围 | 当前结论 |
 |---|---|---|
 | HunyuanOCR 1.5 AR | 20 文档 P1/P2/P4 | 页面并发有提速；P4 存在内容差异，未保存无损最优 profile |
+| Xiaomi-OCR-0 | GPU 6 中文试卷/英文杂志各 2 页，P1/P2 与 latency 各一次 | 三项全部通过输出/覆盖检查；ready 后处理吞吐 P1=0.203、P2=0.309 页/秒。逐文档 latency=9.48/6.14 秒；缓存和单次小样本影响未控制，不作为最终配置或正式速度结论 |
 | HunyuanOCR DFlash | 有界页面 smoke | 环境和 DFlash 路线通过；3090 profile 与 AR 分开 |
 | DeepSeek-OCR-2 | 20 文档 P1/P2 | P2 完成；部分 P4 受端口/基础设施影响，不能当作 OOM 上限 |
 | Qianfan 普通/think | 单页 smoke 与有界 page pool | 当前路线按输入 PDF 页边界导出；joint 已退出正式调度 |

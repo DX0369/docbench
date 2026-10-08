@@ -3,6 +3,7 @@
 ## 用途与版本
 
 GLM-OCR 常驻 self-hosted SDK、PP-DocLayoutV3 布局模型和 vLLM 识别服务共用此环境。
+LightOnOCR-2-1B 和 Xiaomi-OCR-0 的服务及 worker 也使用此环境。
 运行主线及参数只在[吞吐协议](../THROUGHPUT_TUNING_PROTOCOL.md#glm-ocr-主线)维护；
  GPU 运行与内容限制见 [RUN_COMMANDS.md](../RUN_COMMANDS.md) 和吞吐协议。
 
@@ -17,6 +18,9 @@ LightOnOCR-2-1B 的 vLLM page-pool adapter 也复用此环境，不额外安装�
 LightOnOCR-2 的官方推理参数、PDF 预处理和 benchmark 规则见
 [吞吐协议](../THROUGHPUT_TUNING_PROTOCOL.md)；复用关系和最小 import 检查见
 [gdb_lightonocr2.md](gdb_lightonocr2.md)。
+
+Xiaomi-OCR-0 的复用关系、依赖来源和迁移检查见
+[gdb_xiaomi_ocr.md](gdb_xiaomi_ocr.md)；环境恢复统一使用下文配方。
 
 ## 恢复已验证环境
 

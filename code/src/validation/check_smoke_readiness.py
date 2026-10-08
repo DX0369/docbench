@@ -24,6 +24,7 @@ MINERU_PROFILES = {
 }
 
 ENV_BY_METHOD = {
+    "xiaomi_ocr_0": ("gdb_glmocr",),
     "teleocr_vllm_async": ("gdb_teleocr",),
     "lightonocr2_1b": ("gdb_glmocr",),
     "mineru_344_2605_popo": ("gdb_mineru", "gdb_mineru_popo"),
@@ -170,6 +171,7 @@ def check_method_models(
     single_directories = {
         method_id: (get_method_version(method_id).display_name, get_method_version(method_id).model_path)
         for method_id in (
+            "xiaomi_ocr_0",
             "teleocr_vllm_async",
             "lightonocr2_1b",
             "hunyuanocr_10",

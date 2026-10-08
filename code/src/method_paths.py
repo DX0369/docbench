@@ -18,6 +18,7 @@ METHOD_REPOSITORY_DIRS: dict[str, str] = {
     "paddleocr": "paddleocr",
     "qianfan_vl": "qianfan_vl",
     "teleocr": "TeleOCR",
+    "xiaomi_ocr": "Xiaomi-OCR-0",
     "unlimited_ocr": "unlimited_ocr",
     "youtu": "youtu",
 }

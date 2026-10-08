@@ -67,6 +67,11 @@ from methods.lightonocr2.commands import (
     build_worker as build_lightonocr2_worker,
     healthcheck_url as lightonocr2_healthcheck_url,
 )
+from methods.xiaomi_ocr.commands import (
+    build_service as build_xiaomi_service,
+    build_worker as build_xiaomi_worker,
+    healthcheck_url as xiaomi_healthcheck_url,
+)
 from methods.marker.commands import build_worker as build_marker_worker
 from methods.pp_structurev3.commands import build_worker as build_ppstructure_worker
 from methods.mineru_popo.commands import build_worker as build_mineru_popo_worker
@@ -116,6 +121,16 @@ def managed_service_identity(method_id: str, command: list[str], port: int) -> d
 
 
 SERVICE_TASKS: dict[str, ServiceTask] = {
+    "xiaomi_ocr_0": ServiceTask(
+        method_id="xiaomi_ocr_0",
+        runner_env="gdb_glmocr",
+        worker_builder=build_xiaomi_worker,
+        service_builder=build_xiaomi_service,
+        healthcheck_builder=xiaomi_healthcheck_url,
+        docs_per_job=1,
+        env_overrides={"PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+                       "TOKENIZERS_PARALLELISM": "false"},
+    ),
     "teleocr_vllm_async": ServiceTask(
         method_id="teleocr_vllm_async",
         runner_env="gdb_teleocr",

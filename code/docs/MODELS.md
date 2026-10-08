@@ -143,6 +143,19 @@ hf download lightonai/LightOnOCR-2-1B \
 `environments/gdb_lightonocr2.md`。每个请求只包含一张页面图片，不登记整篇 PDF 的
 joint 路线；P 表示跨 PDF 的页面在途数。
 
+### Xiaomi-OCR-0
+
+仅使用官方整页 checkpoint 和源码 helper，不使用布局权重、region 或整文档 joint。
+
+```bash
+hf download SeerRay-Lab/Xiaomi-OCR-0 \
+  --repo-type model \
+  --local-dir "$GDB_MODEL_ROOT/Xiaomi-OCR-0"
+```
+
+模型架构为 `Qwen3_5ForConditionalGeneration`。服务和 worker 复用 `gdb_glmocr`；
+参数与安装边界见 `environments/gdb_xiaomi_ocr.md`；GPU 6 两文档 P1/P2 与 latency smoke 已通过，未进行正式调参。
+
 ### PaddleOCR-VL 1.5 与 1.6
 
 ```bash

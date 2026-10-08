@@ -57,6 +57,7 @@ run_fixed pp_structurev3 1
 run_fixed monkeyocr_pro_3b 4
 run_fixed teleocr_vllm_async 1
 run_fixed lightonocr2_1b 1
+run_fixed xiaomi_ocr_0 1
 ```
 
 当前正式 method ID 和 P 的实际含义如下：
@@ -82,6 +83,7 @@ run_fixed lightonocr2_1b 1
 | `youtu` | native resident parser | query batch |
 | `teleocr_vllm_async` | resident TeleOCR vLLM async pipeline | 当前 PDF 内共享的 layout/region 请求并发 |
 | `lightonocr2_1b` | official vLLM single-page page pool | 跨 PDF 的页面在途数；每个请求固定一张图片 |
+| `xiaomi_ocr_0` | official batch whole-page + vLLM page pool | 跨 PDF 的页面渲染／请求在途数；不登记 region 或 joint |
 
 Qianfan 固定使用单页 page pool；Unlimited 的 page pool 路线仍需显式选择：
 
@@ -218,6 +220,52 @@ Qianfan 直接搜索单页 page_pool；Unlimited 的 `page_pool` 仍不能把
 
 先只检查命令映射时加 `--dry-run`；只有真实运行并确认成功的配置才保存 profile。
 失败档必须保留在该 run 的日志中，不能由前一个成功档替代。
+
+## Xiaomi-OCR-0：整页路线
+
+仅接入官方整页解析，不启用 PP-DocLayoutV3、region 或 joint。服务和 worker
+默认复用 `gdb_glmocr`；环境没有新增安装或升级，GPU 6 两 PDF 的 P1/P2 与 latency smoke 已通过，尚未进行正式调参。
+复用官方 batch prompt、RGB/最长边 2048px 图像编码和 Markdown 后处理；
+PDF 渲染使用项目指定的 200 DPI。生成上限 16384、temperature 0、top_p 0.8、
+thinking 关闭、请求超时 600 秒；服务上下文 32768 是项目设置。
+不设置 `max_num_seqs`，显存比例、引擎 batch 和编译模式沿用 vLLM 默认。
+
+固定 P 使用上面的公共变量和 `run_fixed`：
+
+```bash
+run_fixed xiaomi_ocr_0 4
+```
+
+20 文档压力搜索：
+
+```bash
+"$PY" src/benchmark/run_pressure_sweep.py \
+    --methods xiaomi_ocr_0 \
+    --pressures 1,2,4,8,16,32,64,128,256 \
+    --gpus "$GPU" \
+    --execution-policy serial \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_xiaomi_sweep" \
+    --save-profile "$CODE/config/throughput_profiles/rtx3090.json"
+```
+
+逐文档延迟测试（PDF 和页请求都顺序执行，服务只加载一次）：
+
+```bash
+"$PY" src/benchmark/run_single_gpu.py \
+    --method xiaomi_ocr_0 \
+    --gpu-id "$GPU" \
+    --pressure 1 --latency-mode \
+    --pdf-list-file "$INPUTS" \
+    --run-name "${RUN_ID}_xiaomi_latency" \
+    --output-root-base "$RUN_ROOT/outputs" \
+    --log-root "$RUN_ROOT/logs/xiaomi_latency"
+```
+
+全量输入可将 `--pdf-list-file "$INPUTS"` 换为 `--input-root "$PDF_ROOT"`。
+Smoke 需把输出和日志显式改到独立 `tmp/<run_id>/`，不能写入正式结果目录。
+必要覆盖参数只有 `--xiaomi-env`、`--xiaomi-model-path`、`--xiaomi-dpi`、
+`--xiaomi-max-tokens`、`--xiaomi-max-model-len`；P 仍由统一 `--pressure` 控制。
 
 ## 正式 Latency 测试
 

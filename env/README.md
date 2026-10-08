@@ -18,3 +18,10 @@
 
 锁目录名称是历史导出批次，不代表所有文件同日导出。依赖发生实际变化后才更新对应快照；
 仅修改代码或文档时不重新导出。
+
+Xiaomi-OCR-0 与 LightOnOCR-2-1B 复用 `gdb_glmocr`，对应
+[`gdb_glmocr.explicit.txt`](locks_rtx3090_20260720/gdb_glmocr.explicit.txt)、
+[`gdb_glmocr.pip-freeze.txt`](locks_rtx3090_20260720/gdb_glmocr.pip-freeze.txt) 和
+[`gdb_glmocr.full.no-builds.yml`](locks_rtx3090_20260720/gdb_glmocr.full.no-builds.yml)，
+不单独创建 Xiaomi 锁文件。恢复与检查见
+[`gdb_xiaomi_ocr.md`](../code/docs/environments/gdb_xiaomi_ocr.md)。
