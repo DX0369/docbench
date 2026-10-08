@@ -16,7 +16,6 @@ from common import (
     apply_shard_to_pdf_paths,
     collect_pdf_paths,
     load_pdf_paths_from_file,
-    runtime_unusable,
 )
 from image_vllm_client import build_openai_client
 
@@ -30,7 +29,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pdf-list-file", type=Path)
     parser.add_argument("--server-url", type=str, default="http://127.0.0.1:8002/v1")
     parser.add_argument("--model-name", type=str, default="qianfan-ocr")
-    parser.add_argument("--request-mode", choices=("joint", "page_pool"), default="joint")
     parser.add_argument("--page-concurrency", type=int, default=1)
     parser.add_argument("--queue-dir", type=Path)
     parser.add_argument("--worker-id")
@@ -86,22 +84,8 @@ def main() -> None:
 
 
 def process_pdf_paths(args, client, pdf_paths):
-    from methods.qianfan_ocr.runtime import run_joint, record_error
-    if args.request_mode == "page_pool":
-        from methods.qianfan_ocr.page_pool import process_page_pool
-        return process_page_pool(args, client, pdf_paths)
-    had_failure = False
-    for pdf_path in pdf_paths:
-        try:
-            run_joint(args, client, pdf_path)
-        except FileExistsError:
-            raise
-        except Exception as exc:
-            had_failure = True
-            record_error(args, pdf_path, exc)
-            if args.fail_fast or runtime_unusable(exc):
-                raise
-    return had_failure
+    from methods.qianfan_ocr.page_pool import process_page_pool
+    return process_page_pool(args, client, pdf_paths)
 
 
 if __name__ == "__main__":

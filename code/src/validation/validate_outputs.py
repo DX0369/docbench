@@ -28,8 +28,8 @@ def validate_completed_page_counts(method, input_root, output_root, pdf_paths):
             metrics = json.loads((output / "metrics.json").read_text())
             if not isinstance(metrics, dict):
                 raise ValueError("metrics.json must contain an object")
-            if method in {"qianfan_ocr", "qianfan_ocr_think"} and metrics.get("request_mode") == "joint":
-                validate_qianfan_joint_metrics(metrics, expected)
+            if method in {"qianfan_ocr", "qianfan_ocr_think"}:
+                validate_qianfan_metrics(metrics, expected)
             elif method == "unlimited_ocr_sglang":
                 validate_unlimited_metrics(metrics, expected)
             elif method == "teleocr_vllm_async":
@@ -106,29 +106,25 @@ def is_doc_dir(path: Path) -> bool:
     ).exists()
 
 
-def validate_qianfan_joint_metrics(metrics: dict[str, Any], expected: int) -> None:
-    """Joint counts submitted input pages, not invented per-page inference."""
+def validate_qianfan_metrics(metrics: dict[str, Any], expected: int) -> None:
+    """Each input page must have one request and an ordered page record."""
     method = metrics["method_id"]
     if method not in {"qianfan_ocr", "qianfan_ocr_think"}:
-        raise ValueError("Joint exception only applies to Qianfan")
-    if metrics["execution_profile"] != f"{method}_vllm_joint" or metrics["request_mode"] != "joint":
-        raise ValueError("Qianfan joint profile mismatch")
+        raise ValueError("Qianfan metadata has an unknown method ID")
+    if metrics["execution_profile"] != f"{method}_vllm_page_pool" or metrics["request_mode"] != "page_pool":
+        raise ValueError("Qianfan page-pool profile mismatch")
     if metrics["input_page_count"] != expected or metrics["page_count"] != expected:
-        raise ValueError("Qianfan joint input count mismatch")
+        raise ValueError("Qianfan input page count mismatch")
+    if metrics["output_scope"] != "document_and_pages" or metrics["page_boundary_source"] != "input_pdf":
+        raise ValueError("Qianfan must export pages using input PDF boundaries")
     requests = metrics["requests"]
-    if len(requests) != 1 or requests[0]["image_count"] != expected or requests[0]["finish_reason"] not in {"stop", "length"}:
-        raise ValueError("Joint requires one complete request containing all input pages")
-    pages = metrics["pages"]
-    if metrics["output_scope"] == "document_only":
-        if pages != [] or metrics["page_boundary_source"] != "unavailable":
-            raise ValueError("Document-only joint must not fabricate page records")
-    elif metrics["output_scope"] == "document_and_pages":
-        if [p["page_index"] for p in pages] != list(range(1, expected + 1)):
-            raise ValueError("Incomplete joint page views")
-        if any(p["latency_seconds"] != "N/A" for p in pages):
-            raise ValueError("Joint has no independent per-page inference latency")
-    else:
-        raise ValueError("Unknown Qianfan joint output scope")
+    indices = list(range(1, expected + 1))
+    if [r["page_index"] for r in requests] != indices or any(
+        r["image_count"] != 1 or r["finish_reason"] not in {"stop", "length"} for r in requests
+    ):
+        raise ValueError("Qianfan requires one completed single-image request per page")
+    if [p["page_index"] for p in metrics["pages"]] != indices:
+        raise ValueError("Incomplete Qianfan page records")
 
 
 def validate_unlimited_metrics(metrics: dict[str, Any], expected: int) -> None:
@@ -243,11 +239,10 @@ def validate_doc_dir(
             result.add_issue("error", image_boxes_path, f"invalid image_boxes.json: {exc}")
             ok = False
 
-    joint = bool(metrics and metrics.get("method_id") in {"qianfan_ocr", "qianfan_ocr_think"} and metrics.get("request_mode") == "joint")
-    joint_document_only = joint and metrics.get("output_scope") == "document_only"
+    qianfan = bool(metrics and metrics.get("method_id") in {"qianfan_ocr", "qianfan_ocr_think"})
     unlimited = bool(metrics and metrics.get("method_id") == "unlimited_ocr_sglang")
     unlimited_document_only = unlimited and metrics.get("output_scope") == "document_only"
-    if not page_files and not (allow_document_only or joint_document_only or unlimited_document_only):
+    if not page_files and not (allow_document_only or unlimited_document_only):
         result.add_issue("error", doc_dir, "missing pages/page_*.md")
         ok = False
     if metrics is not None:
@@ -259,7 +254,7 @@ def validate_doc_dir(
         if not isinstance(pages, list):
             result.add_issue("error", metrics_path, "metrics.pages must be a list")
             ok = False
-        elif isinstance(page_count, int) and len(pages) != page_count and not (joint_document_only or unlimited_document_only):
+        elif isinstance(page_count, int) and len(pages) != page_count and not unlimited_document_only:
             result.add_issue(
                 "error",
                 metrics_path,
@@ -283,13 +278,11 @@ def validate_doc_dir(
             except (KeyError, TypeError, ValueError) as exc:
                 result.add_issue("error", metrics_path, f"Invalid Unlimited metadata: {exc}")
                 ok = False
-        if joint:
+        if qianfan:
             try:
-                validate_qianfan_joint_metrics(metrics, page_count)
-                if joint_document_only and page_files:
-                    raise ValueError("Document-only joint contains stale page files")
+                validate_qianfan_metrics(metrics, page_count)
             except (KeyError, TypeError, ValueError) as exc:
-                result.add_issue("error", metrics_path, f"Invalid joint metadata: {exc}")
+                result.add_issue("error", metrics_path, f"Invalid Qianfan metadata: {exc}")
                 ok = False
 
     return ok

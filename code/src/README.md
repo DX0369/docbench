@@ -31,10 +31,9 @@ run_single_gpu.py → execution/tasks.py → methods/<family>/`。
 - DFlash 配置在 `methods/hunyuanocr/dflash.py`；
   Paddle 服务 wrapper 在 `methods/paddleocr_vl/serve.py`；
   通用 VLM 的可选服务补丁在 `methods/generic_vlm/serve.py`。
-- Qianfan 的 `vllm.py` 同时是直接/常驻队列入口；`runtime.py` 管 joint 请求与输出，
-  `page_pool.py` 绑定共享页面调度，`prompt.py` 固定官方长 prompt。
-  joint（默认）与 page_pool 均为正式支持路线，普通/think 共用；旧短 prompt 从 Git
-  `f578eeda` 恢复。模式和参数见[吞吐协议](../docs/THROUGHPUT_TUNING_PROTOCOL.md#qianfanjoint-与-page_pool-双路线)。
+- Qianfan 的 `vllm.py` 是直接/常驻队列入口；`runtime.py` 固定模型卡单页请求，
+  `page_pool.py` 绑定共享页面调度，普通/think 共用同一短 prompt 和 vLLM 服务。
+  P 表示跨 PDF 的页面在途数，文档导出仍按输入 PDF 页序组织。
 - `execution/page_pool.py` 是 Hunyuan、Qianfan/Unlimited page_pool 与 DeepSeek 共用的有界调度；
   `common.py` 提供同一单页 Poppler 渲染，推理/后处理/文档导出仍在方法目录。
   Hunyuan 默认一个常驻客户端、全输入一个 job，pressure 只映射全局页面任务数；

@@ -22,7 +22,7 @@
 首档失败不生成 profile，历史成功档可以保留但必须保留失败事实。
 
 只有显式传入 `--save-profile` 才保存选定配置，不自动启动正式实验。profile 按方法 ID 和 execution profile
-保存，只记录本方法实际需要的参数；joint、page_pool 和不同模型版本不能互相套用。
+保存，只记录本方法实际需要的参数；不同模型版本和 execution profile 不能互相套用。
 
 ### 计时和成功判定
 
@@ -62,8 +62,7 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 |---|---|---|---|
 | HunyuanOCR AR / DFlash | vLLM 页面池 | 页面在途数 | 页面级请求 |
 | DeepSeek-OCR-2 | AsyncLLM 页面流水线 | 页面在途数 | 页面级请求 |
-| Qianfan `page_pool` | 独立页面请求 | 页面在途数 | 可跨文档供给 |
-| Qianfan `joint` | 一次请求整篇文档 | 文档客户端数 | 文档级联合上下文 |
+| Qianfan 普通/think | 官方单页请求 + 共享 page pool | 页面在途数 | 可跨文档供给，按 PDF 页序导出 |
 | Unlimited `page_pool` | SGLang 页面请求 | 页面在途数 | 可跨文档供给 |
 | Unlimited `joint` | SGLang 整篇请求 | 文档客户端数 | 文档级联合上下文 |
 | MonkeyOCR 3B/1.2B | 常驻 vLLM async runtime | 文档内区域在途数 | 官方分组供给 |
@@ -88,7 +87,7 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | HunyuanOCR 1.0 | 官方客户端 `max_tokens=16384` | 生成 16384；上下文 32768 |
 | HunyuanOCR 1.5 AR | 官方 vLLM `max-model-len=131072`、`max-num-batched-tokens=131072`、客户端 `max_tokens=32768` | 生成 32768；上下文/batched tokens 65536（RTX 3090 安全值） |
 | HunyuanOCR 1.5 DFlash | 官方上下文/batched tokens 131072、speculative tokens 15、生成 32768 | 生成 32768；上下文/batched tokens 65536；speculative tokens 15 |
-| Qianfan-OCR 普通/Think | 官方通用 HF 示例 `max_new_tokens=512`，未给当前 OCR 服务统一值 | 生成 16384；服务上下文 32768 |
+| Qianfan-OCR 普通/Think | 模型卡 `max_new_tokens=16384`；基础 prompt 为 `Parse this document to Markdown.`，think 追加 `<think>` | 生成 16384；服务上下文 32768 |
 | DeepSeek-OCR-2 | 当前官方 adapter/API 默认 8192 | 生成 8192；上下文 8192 |
 | PaddleOCR-VL 1.5/1.6 | 官方 `max_new_tokens` 默认不传；vLLM 上下文按服务配置 | 不传 `max_new_tokens`；服务上下文 16384 |
 | GLM-OCR | 官方 YAML `max_tokens=8192`；上下文按硬件设置 | 生成 8192；服务上下文 32768 |
@@ -110,13 +109,13 @@ Paddle 不传 `max_new_tokens` 后，metrics 不再伪造该字段；实际上�
 
 Paddle/GLM 的页面、布局 batch 和内部线程先保持官方值；PP-StructureV3 只调整已确认的原生 batch；
 Monkey 两个 checkpoint 使用独立 ID 但共用 async runtime；MinerU 不调整内部 VLM batch、页窗口和组件 batch；
-Qianfan/Unlimited 的 joint 与 page_pool 结果不能混排。MinerU-Popo 需要同时驻留两个模型，3090 尚未形成稳定 profile，
+Qianfan 当前只登记单页 page_pool；旧 joint 结果属于历史诊断，不能与当前 profile 混排。MinerU-Popo 需要同时驻留两个模型，3090 尚未形成稳定 profile，
 暂不纳入正式调参。
 
 ### Latency 参数口径
 
-Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan `page_pool` 和
-Unlimited `page_pool` 使用页面级 `P=1`；Qianfan/Unlimited `joint` 以及其他方法只
+Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan 和
+Unlimited `page_pool` 使用页面级 `P=1`；其他方法只
 固定一个外层文档客户端。Monkey 使用官方区域并发 64，TeleOCR 使用 async 默认 100，
 Youtu 使用 query batch 5；Paddle 不显式传 `vl_rec_max_concurrency`，GLM 不显式传
 `max_workers`（锁定 YAML 的 32），PP 使用基础 `batch_scale=1`，Marker 使用一个
@@ -133,7 +132,7 @@ latency 标识，不代表所有内部并发均为 1。
 | HunyuanOCR 1.5 AR | 20 文档 P1/P2/P4 | 页面并发有提速；P4 存在内容差异，未保存无损最优 profile |
 | HunyuanOCR DFlash | 有界页面 smoke | 环境和 DFlash 路线通过；3090 profile 与 AR 分开 |
 | DeepSeek-OCR-2 | 20 文档 P1/P2 | P2 完成；部分 P4 受端口/基础设施影响，不能当作 OOM 上限 |
-| Qianfan joint/page_pool | 短 smoke 与有界 joint | 两条路线均可运行；joint 不保证可靠分页 |
+| Qianfan 普通/think | 单页 smoke 与有界 page pool | 当前路线按输入 PDF 页边界导出；joint 已退出正式调度 |
 | PaddleOCR-VL 1.5/1.6 | 短多页及 1.6 P1/P2/P4/P8 | pipeline 和区域服务通过；P 不等于内部所有 batch |
 | GLM-OCR | 20 文档 P1/P2/P4 初筛 | 区域并发有提速；输出存在原生内容差异 |
 | MonkeyOCR 3B/1.2B | 短多页及 20 文档 P1/P2/P4 | P4 为当前子集已测最快；输出差异单独记录 |

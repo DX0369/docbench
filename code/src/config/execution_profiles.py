@@ -55,12 +55,11 @@ EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
     ),
     *(
         ExecutionProfile(
-            f"{method}_vllm_{mode}", method, "exclusive_model_service",
-            "qianfan_page_pool" if mode == "page_pool" else "service_concurrency",
+            f"{method}_vllm_page_pool", method, "exclusive_model_service",
+            "qianfan_page_pool",
             ("Qianfan-OCR",),
         )
         for method in ("qianfan_ocr", "qianfan_ocr_think")
-        for mode in ("joint", "page_pool")
     ),
     ExecutionProfile(
         "mineru_344_2605_popo_vllm_services", "mineru_344_2605_popo",
@@ -193,8 +192,8 @@ DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
     "paddleocr_vl_15": "paddleocr_vl_15_multi_pdf_queue",
     "paddleocr_vl_16": "paddleocr_vl_16_multi_pdf_queue",
     "pp_structurev3": "pp_structurev3_page_prefetch",
-    "qianfan_ocr": "qianfan_ocr_vllm_joint",
-    "qianfan_ocr_think": "qianfan_ocr_think_vllm_joint",
+    "qianfan_ocr": "qianfan_ocr_vllm_page_pool",
+    "qianfan_ocr_think": "qianfan_ocr_think_vllm_page_pool",
     "youtu": "youtu_native",
 }
 
@@ -209,7 +208,6 @@ def resolve_execution_profile(
     method_id: str,
     *,
     execution_mode: str | None = None,
-    qianfan_request_mode: str = "joint",
     unlimited_request_mode: str = "joint",
 ) -> ExecutionProfile:
     if method_id == "unlimited_ocr_sglang":
@@ -224,7 +222,7 @@ def resolve_execution_profile(
     elif method_id == "deepseek_ocr2":
         profile_id = "deepseek_ocr2_page_pool"
     elif method_id in {"qianfan_ocr", "qianfan_ocr_think"}:
-        profile_id = f"{method_id}_vllm_{qianfan_request_mode}"
+        profile_id = f"{method_id}_vllm_page_pool"
     elif method_id == "mineru_344_2605_popo":
         if execution_mode not in (None, "vllm_services"):
             raise ValueError("Popo cold/Transformers execution is archived; use shared vLLM services")
@@ -263,7 +261,7 @@ RUNTIME_ARGUMENTS = {
         ("hunyuan_vllm_max_num_batched_tokens", int, 65536),
         ("hunyuan_vllm_enforce_eager", bool, False)],
     "qianfan": [("qianfan_service_env", str, "gdb_qianfan"),
-        ("qianfan_request_mode", str, "joint"), ("qianfan_execution_mode", str, "auto")],
+        ("qianfan_execution_mode", str, "auto")],
     "deepseek": [("deepseek_service_env", str, "gdb_deepseek_ocr2"),
         ("deepseek_max_model_len", int, 8192), ("deepseek_max_tokens", int, 8192),
         ("deepseek_gpu_memory_utilization", float, .90), ("deepseek_preprocess_workers", int, 64),
@@ -294,7 +292,7 @@ def add_runtime_arguments(parser):
     from methods.hunyuanocr.dflash import add_dflash_args
     from methods.unlimited_ocr.commands import add_runtime_args as unlimited_args
     from methods.pp_structurev3.commands import add_runtime_args as pp_args
-    choices = {"qianfan_request_mode": ("joint", "page_pool"), "qianfan_execution_mode": ("auto", "eager"),
+    choices = {"qianfan_execution_mode": ("auto", "eager"),
                "teleocr_backend": ("vllm-async-engine",), "teleocr_layout_mode": ("Detection",),
                "mineru_parse_method": ("auto", "txt", "ocr"), "pp_device": ("gpu", "cpu")}
     for specs in RUNTIME_ARGUMENTS.values():
@@ -373,8 +371,7 @@ def resolve_runtime_defaults(args, method):
 
 
 def profile_for_args(method, args):
-    return resolve_execution_profile(method, qianfan_request_mode=args.qianfan_request_mode,
-        unlimited_request_mode=args.unlimited_ocr_request_mode).profile_id
+    return resolve_execution_profile(method, unlimited_request_mode=args.unlimited_ocr_request_mode).profile_id
 
 
 def save_selected_profile(path, method, summary):
@@ -415,9 +412,8 @@ def _check_profile_entry(method, profile, entry):
         if value != effective[key] or (isinstance(effective[key], bool) and type(value) is not bool):
             raise ValueError(f"Selected runtime option has an invalid type or unresolved value: {key}")
     from config.throughput_pressure import pressure_mapping
-    pressure_mapping(method, entry["pressure"], options.get("qianfan_request_mode", "joint"),
-                     options.get("unlimited_ocr_request_mode", "joint"))
-    actual = resolve_execution_profile(method, qianfan_request_mode=options.get("qianfan_request_mode", "joint"),
+    pressure_mapping(method, entry["pressure"], unlimited_request_mode=options.get("unlimited_ocr_request_mode", "joint"))
+    actual = resolve_execution_profile(method,
         unlimited_request_mode=options.get("unlimited_ocr_request_mode", "joint")).profile_id
     if actual != profile:
         raise ValueError("Selected profile cannot cross request routes")

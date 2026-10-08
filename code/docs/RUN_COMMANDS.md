@@ -67,8 +67,8 @@ run_fixed lightonocr2_1b 1
 | `hunyuanocr_15` | vLLM AR page pool | 页面在途数 |
 | `hunyuanocr_15_dflash` | vLLM DFlash page pool | 页面在途数 |
 | `deepseek_ocr2` | resident page pool | 页面在途数 |
-| `qianfan_ocr` | vLLM joint 或 page pool | 文档客户端数或页面在途数 |
-| `qianfan_ocr_think` | vLLM joint 或 page pool | 文档客户端数或页面在途数 |
+| `qianfan_ocr` | vLLM 单页 page pool | 页面在途数 |
+| `qianfan_ocr_think` | vLLM 单页 page pool | 页面在途数 |
 | `unlimited_ocr_sglang` | SGLang joint 或 page pool | 文档客户端数或页面在途数 |
 | `monkeyocr_pro_3b` | vLLM async multifile | 文档内区域在途数 |
 | `monkeyocr_pro_1_2b` | vLLM async multifile | 文档内区域在途数 |
@@ -83,15 +83,13 @@ run_fixed lightonocr2_1b 1
 | `teleocr_vllm_async` | resident TeleOCR vLLM async pipeline | 当前 PDF 内共享的 layout/region 请求并发 |
 | `lightonocr2_1b` | official vLLM single-page page pool | 跨 PDF 的页面在途数；每个请求固定一张图片 |
 
-Qianfan 和 Unlimited 的 page pool 路线必须显式选择，不能复用 joint 的 profile：
+Qianfan 固定使用单页 page pool；Unlimited 的 page pool 路线仍需显式选择：
 
 ```bash
-run_fixed qianfan_ocr 4 --qianfan-request-mode page_pool
-run_fixed qianfan_ocr_think 4 --qianfan-request-mode page_pool
 run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
 ```
 
-默认路线是 `joint`。如果已经保存选定 profile，固定运行改用：
+如果已经保存选定 profile，固定运行改用：
 
 ```bash
 "$PY" src/benchmark/run_single_gpu.py \
@@ -140,7 +138,7 @@ run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
 ```
 
 TeleOCR 只使用单个常驻 async runtime；P 映射为当前 PDF 内 layout/region 请求的
-`max_concurrency`，文档之间保持官方顺序，不增加 joint 或 page_pool 参数：
+`max_concurrency`，文档之间保持官方顺序：
 
 ```bash
 "$PY" src/benchmark/run_pressure_sweep.py \
@@ -192,15 +190,14 @@ run_fixed lightonocr2_1b 4
 压力搜索会在该 run 内保存实际输入清单，便于复核；这不是需要用户预先创建的
 job 文件。
 
-Qianfan 和 Unlimited 的 `page_pool` 是独立路线，搜索时必须显式选择，不能把
-`joint` 的搜索结果当作 `page_pool` 配置：
+Qianfan 直接搜索单页 page_pool；Unlimited 的 `page_pool` 仍不能把
+`joint` 的搜索结果当作其配置：
 
 ```bash
 # Qianfan page_pool
 "$PY" src/benchmark/run_pressure_sweep.py \
     --methods qianfan_ocr \
     --pressures 1,2,4,8,16,32,64,128,256 \
-    --qianfan-request-mode page_pool \
     --gpus "$GPU" \
     --execution-policy serial \
     --pdf-list-file "$INPUTS" \

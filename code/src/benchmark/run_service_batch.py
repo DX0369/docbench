@@ -141,7 +141,6 @@ def parse_args() -> argparse.Namespace:
         help="Global bound on Hunyuan page render/request tasks across input PDFs.",
     )
     parser.add_argument("--qianfan-service-env", default="gdb_qianfan")
-    parser.add_argument("--qianfan-request-mode", choices=("joint", "page_pool"), default="joint")
     parser.add_argument("--qianfan-page-concurrency", type=int, default=1)
     parser.add_argument("--qianfan-execution-mode", choices=("eager", "auto"), default="auto",
                         help="Qianfan: let vLLM choose compilation/CUDA graphs (default), or explicitly force eager.")
@@ -489,8 +488,7 @@ def run_method_with_persistent_workers(
     args: argparse.Namespace,
 ) -> list[dict[str, object]]:
     pdf_paths = collect_pdf_paths(Path(args.input_root))
-    page_pool = method_id.startswith("hunyuanocr_") or (
-        method_id in {"qianfan_ocr", "qianfan_ocr_think"} and args.qianfan_request_mode == "page_pool")
+    page_pool = method_id.startswith("hunyuanocr_") or method_id in {"qianfan_ocr", "qianfan_ocr_think"}
     page_pool = page_pool or method_id == "deepseek_ocr2"
     page_pool = page_pool or (method_id == "unlimited_ocr_sglang" and args.unlimited_ocr_request_mode == "page_pool")
     jobs = [pdf_paths] if page_pool and pdf_paths else chunk_pdf_paths(pdf_paths, config.docs_per_job)
@@ -653,7 +651,6 @@ def main() -> None:
             )
         profile = resolve_execution_profile(
             method_id,
-            qianfan_request_mode=args.qianfan_request_mode,
             unlimited_request_mode=args.unlimited_ocr_request_mode,
             execution_mode=(
                 "api" if method_id.startswith("mineru") else None

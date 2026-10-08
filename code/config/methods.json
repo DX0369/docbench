@@ -264,7 +264,7 @@
       "benchmark_status": "active",
       "role": "current_candidate",
       "validation_status": "rtx3090_single_page_smoke_verified",
-      "notes": "Inference uses model-bundled remote code; the locked Qianfan-VL checkout is reference-only. Both joint (default, whole-document input) and page_pool (independent pages with page-level outputs) are supported, sharing the pinned official long prompt. Historical legacy_page is retired; recover it from code Git f578eeda. Parameters and validation boundaries: docs/THROUGHPUT_TUNING_PROTOCOL.md and docs/RUN_COMMANDS.md."
+      "notes": "Inference uses model-bundled remote code; the locked Qianfan-VL checkout is reference-only. The active route follows the model-card basic prompt on one image per request, with a shared bounded page pool and ordered per-PDF export. vLLM uses max_tokens=16384, temperature=0 and max_model_len=32768."
     },
     {
       "method_id": "qianfan_ocr_think",
@@ -283,7 +283,7 @@
       "benchmark_status": "active",
       "role": "execution_variant",
       "validation_status": "rtx3090_single_page_smoke_verified",
-      "notes": "Layout-as-Thought shares the checkpoint, environment and joint/page_pool implementations with ordinary Qianfan. Thinking is triggered once by the chat template; raw replies are retained and leading thinking is separated from final Markdown. Historical legacy_page is retired; recover it from code Git f578eeda. Validation boundaries, including multi-image omissions, are documented in docs/THROUGHPUT_TUNING_PROTOCOL.md."
+      "notes": "Layout-as-Thought shares the checkpoint, environment and page-pool implementation with ordinary Qianfan. It follows the model-card prompt with a literal <think> suffix, retains raw replies and removes the leading thinking block before Markdown export."
     },
     {
       "method_id": "deepseek_ocr2",

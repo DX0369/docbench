@@ -108,15 +108,13 @@ def parse_args() -> argparse.Namespace:
     if args.latency_mode:
         outer, overrides, mapping, docs = latency_mapping(
             args.method,
-            args.qianfan_request_mode,
             args.unlimited_ocr_request_mode,
         )
     else:
         outer, overrides, mapping, docs = pressure_mapping(
             args.method,
             args.pressure,
-            args.qianfan_request_mode,
-            args.unlimited_ocr_request_mode,
+            unlimited_request_mode=args.unlimited_ocr_request_mode,
         )
     if args.latency_mode and outer != 1:
         parser.error("--latency-mode requires pressure 1 to map to one worker")
@@ -418,7 +416,7 @@ def run_trial(
         if concurrency != 1:
             raise ValueError("LightOnOCR-2 page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
-    if method in {"qianfan_ocr", "qianfan_ocr_think"} and base_args.qianfan_request_mode == "page_pool":
+    if method in {"qianfan_ocr", "qianfan_ocr_think"}:
         if concurrency != 1:
             raise ValueError("Qianfan page_pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
@@ -728,7 +726,7 @@ def run_trial(
     summary_path = trial_log_dir / "summary.json"
     from config.execution_profiles import resolve_execution_profile
     summary["execution_profile"] = resolve_execution_profile(
-        method, qianfan_request_mode=base_args.qianfan_request_mode,
+        method,
         unlimited_request_mode=base_args.unlimited_ocr_request_mode,
     ).profile_id
     if base_args.latency_mode:

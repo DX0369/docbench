@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-08 13:30 +08:00
+更新时间：2026-10-08 19:45 +08:00
 
 ## 当前阶段
 
@@ -17,9 +17,10 @@
 - 统一保留最小输出：结构化结果、运行状态、失败记录和必要诊断；不默认保存原始响应或图片资产。
 - 已完成方法版本审计、源码 HEAD 审计、smoke/dry-run、P 映射和失败传播的定向核对。详细运行规则见 [`code/docs/RUN_COMMANDS.md`](code/docs/RUN_COMMANDS.md) 和 [`code/docs/THROUGHPUT_TUNING_PROTOCOL.md`](code/docs/THROUGHPUT_TUNING_PROTOCOL.md)。
 - MinerU-Popo 已接入组合流程，但由于双模型容量和稳定吞吐配置尚未确认，暂不纳入本轮正式吞吐调参。
-- GPU 7 两文档 latency smoke 已完成并保存在 `tmp/latency_smoke/gpu7_2pdf_20261004_231416_retry1/`：除 MinerU-Popo 外的 17 个方法 ID（共 20 条执行路线）均完成顺序处理；Qianfan 普通/think 的 joint 路线因 14 页英文文档输入超过 32768 上下文而明确失败，page_pool 路线通过。该结果仅验证入口顺序、输出和失败记录，不代表正式吞吐结论。
+- GPU 7 两文档 latency smoke 已完成并保存在 `tmp/latency_smoke/gpu7_2pdf_20261004_231416_retry1/`：除 MinerU-Popo 外的 17 个方法 ID（共 20 条执行路线）均完成顺序处理；Qianfan 历史 joint 路线因 14 页英文文档输入超过 32768 上下文而明确失败，page_pool 路线通过。该结果仅验证入口顺序、输出和失败记录，不代表正式吞吐结论。
 - TeleOCR 已创建 `gdb_teleocr` 环境；`pip check`、TeleOCR/`TeleOCR_vllm` import probe 和 CUDA 检查通过。GPU 6 上已完成统一 adapter 的单文档 throughput smoke 和双文档 latency smoke，均通过输出 validator：latency 使用官方 `max_concurrency=100`，处理顺序为文档 1→2，render DPI 为 200；throughput P=1 路线也成功。产物保留于 `tmp/teleocr_adapter_smoke/teleocr_adapter_smoke_20261008_110329/`，不代表正式吞吐结果。
 - LightOnOCR-2-1B 已登记为 `lightonocr2_1b`。模型卡确认其正式路线是 vLLM 单页请求（`limit-mm-per-prompt=image:1`），不注册整文档 joint；新增 page-pool adapter，P 映射为页面在途数，官方生成参数和 200 DPI/1540px 预处理均写入 metrics。GPU 2 上使用两份 2 页 PDF 完成 P1/P2 有界 smoke，输出校验通过；P1 处理吞吐约 0.218 页/秒，P2 约 0.334 页/秒。当前先复用 `gdb_glmocr`（Transformers 5.14.1、vLLM 0.20.0）；服务日志仅有 NIXL/CUDA graph 等 warning，无 LightOn 推理错误。产物保留于 `tmp/lightonocr2_smoke/lightonocr2_gpu2_20261008_132000/`，不代表正式吞吐结论。
+- Qianfan 普通/think 已按官方单页基础 prompt 和 page pool 在 GPU 5 完成同一份 3 页英文 PDF 的 P1 smoke；两条路线均输出 3 个页面、每页一张图请求，validator 通过，Think metrics 确认 prompt suffix。产物保留于 `tmp/smoke/qianfan_gpu5_20261008/`，仅验证新入口，不代表正式吞吐结论。
 - Latency 入口已统一为 `run_single_gpu.py --latency-mode` 和 native 入口的同名选项：四个页面请求路线固定页面级并发 1，其他方法串行提交文档但保留官方/default 内部并发。TeleOCR 已接入常驻 async worker、统一输出和 `P` 映射；所有主要路线的 latency mapping、dry-run 和 Python 语法检查通过。一次性 dry-run 产物已清理，尚未启动真实 latency smoke。
 
 ## 当前实验状态
@@ -28,7 +29,7 @@
 | --- | --- |
 | Marker、PP-StructureV3、PaddleOCR-VL、GLM-OCR、DeepSeek-OCR-2、Youtu | 已有正式入口和 smoke/dry-run 结论；最终吞吐 profile 尚未统一选定。 |
 | MonkeyOCR 两个版本 | async 路线已通过固定小规模 GPU 验证；存在内容差异和表格重复等质量 warning，不能据此宣称全局最优。 |
-| Qianfan 普通/think | joint 与 page_pool 路线均已接入；page_pool 修复后小规模补跑通过，joint 的多页分页可靠性仍有限。 |
+| Qianfan 普通/think | 已收束为官方单页基础 prompt + page_pool；普通/think 共用服务，P 映射页面在途数。旧 joint 结果仅作历史证据，不再属于正式调度。 |
 | MinerU 两个版本 | API 路线已完成有界 GPU 压力验证；保留内容差异，未选定最终 profile。 |
 | Hunyuan 1.0、1.5 AR、1.5 DFlash | 三条路线及独立 DFlash 环境已登记并通过有界验证；尚未完成统一吞吐定版。 |
 | Unlimited-OCR SGLang | joint/page_pool 路线已接入并通过有界 smoke；使用 RTX 3090 SM86 兼容补丁，性能不能描述为原封不动的官方实现。 |

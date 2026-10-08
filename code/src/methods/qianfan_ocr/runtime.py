@@ -4,23 +4,20 @@ from __future__ import annotations
 import json
 import math
 import re
-import tempfile
 import time
-from pathlib import Path
 
 from PIL import Image
 
 from common import (
     append_error_payload, build_error_payload, build_image_boxes_payload, build_page_records,
     document_completed, error_context,
-    get_doc_output_dir, render_pdf_pages, save_markdown_bundle, write_json,
+    get_doc_output_dir, save_markdown_bundle, write_json,
     pdf_page_count as page_count, render_pdf_page,
 )
 from image_vllm_client import image_to_data_url
 from methods.qianfan_ocr.prompt import DOCUMENT_PARSING_PROMPT, PROMPT_ID
 from paths import TMP_ROOT
 
-PAGE_MARKER = re.compile(r"^--- Page (\d+) ---[ \t]*$", re.MULTILINE)
 IMAGE_MARKER = re.compile(r"!\[(image|chart|seal)\]\(<box>(.*?)</box>\)", re.DOTALL)
 
 
@@ -30,33 +27,14 @@ def temp_root(args):
     return root
 
 
-def split_pages(text, count):
-    """Only exact, complete model page markers define page views."""
-    markers = list(PAGE_MARKER.finditer(text))
-    if count == 1 and not markers:
-        return [text]
-    if [int(m[1]) for m in markers] != list(range(1, count + 1)):
-        return None
-    if text[:markers[0].start()].strip():
-        return None
-    pages = [
-        text[m.end():markers[i + 1].start() if i + 1 < count else len(text)].strip()
-        for i, m in enumerate(markers)
+def request(args, client, image):
+    """Submit the official one-image model-card request."""
+    prompt = DOCUMENT_PARSING_PROMPT + ("<think>" if args.enable_think else "")
+    content = [
+        {"type": "text", "text": prompt},
+        {"type": "image_url", "image_url": {"url": image_to_data_url(image)}},
     ]
-    return pages if all(pages) else None
-
-
-def request(args, client, images):
-    # The local model chat template appends <think> when enable_thinking=True.
-    # Do not also append it to the user text (that produces two triggers).
-    prompt = DOCUMENT_PARSING_PROMPT
-    # Official CLI order: text, then each image. Let the chat template insert
-    # image placeholders; a manually added single <image> is wrong for joint.
-    content = [{"type": "text", "text": prompt}]
-    content.extend({"type": "image_url", "image_url": {"url": image_to_data_url(p)}} for p in images)
     extra = {"skip_special_tokens": False}
-    if args.enable_think:
-        extra["chat_template_kwargs"] = {"enable_thinking": True}
     started = time.perf_counter()
     response = client.chat.completions.create(
         model=args.model_name, messages=[{"role": "user", "content": content}],
@@ -68,7 +46,7 @@ def request(args, client, images):
     usage = response.usage.model_dump() if response.usage is not None else None
     record = {
         "finish_reason": choice.finish_reason, "usage": usage,
-        "image_count": len(images), "request_seconds": seconds,
+        "image_count": 1, "request_seconds": seconds,
     }
     if choice.finish_reason not in {"stop", "length"}:
         raise ValueError(f"Unconfirmed response: finish_reason={choice.finish_reason!r}")
@@ -118,32 +96,29 @@ def extract_image_boxes(text, image_path, page):
 def export(args, pdf, count, document, pages, records, boxes, started, *, warnings=()):
     output = get_doc_output_dir(args.input_root, args.output_root, pdf)
     save_markdown_bundle(output, pages or [], document)
-    joint = args.request_mode == "joint"
     metrics = {
         "method": "Qianfan-OCR", "method_id": "qianfan_ocr_think" if args.enable_think else "qianfan_ocr",
-        "backend": "vllm", "request_mode": args.request_mode,
-        "execution_profile": ("qianfan_ocr_think" if args.enable_think else "qianfan_ocr") + "_vllm_" + args.request_mode,
-        "prompt_id": PROMPT_ID, "prompt": DOCUMENT_PARSING_PROMPT,
+        "backend": "vllm", "request_mode": "page_pool",
+        "execution_profile": ("qianfan_ocr_think" if args.enable_think else "qianfan_ocr") + "_vllm_page_pool",
+        "prompt_id": PROMPT_ID,
+        "prompt": DOCUMENT_PARSING_PROMPT + ("<think>" if args.enable_think else ""),
         "thinking_enabled": args.enable_think,
-        "thinking_trigger": "chat_template_only" if args.enable_think else "disabled",
+        "thinking_trigger": "prompt_suffix" if args.enable_think else "disabled",
         "pdf_path": str(pdf),
         "model_name": args.model_name, "server_url": args.server_url,
         "dpi": args.dpi, "temperature": 0.0, "max_tokens_per_request": args.max_tokens,
         "page_count": count, "input_page_count": count,
-        "output_scope": "document_only" if pages is None else "document_and_pages",
-        "page_boundary_source": ("single_page_input" if count == 1 else "model_markers") if joint and pages is not None else
-                                ("unavailable" if joint else "independent_requests"),
-        "pages": build_page_records(pages or [], ["N/A"] * count if joint else
-                                   [r["request_seconds"] for r in records]),
+        "output_scope": "document_and_pages",
+        "page_boundary_source": "input_pdf",
+        "pages": build_page_records(pages or [], [r["request_seconds"] for r in records]),
         "requests": records, "doc_total_seconds": time.perf_counter() - started,
         "quality_warnings": list(warnings), "invalid_image_box_count": len(warnings),
         "document_markdown_path": "document.md",
-        "notes": ["Joint input page count is not independently verified output content coverage.",
-                  "Joint request latency is not a per-page inference latency."] if joint else [],
+        "notes": [],
     }
     write_json(output / "image_boxes.json", build_image_boxes_payload(
         method="Qianfan-OCR", pdf_path=pdf, entries=boxes,
-        notes=["No page assignment or crops are guessed when joint page markers are unavailable."] if pages is None else [],
+        notes=[],
     ))
     write_json(output / "metrics.json", metrics)
     if warnings:
@@ -158,11 +133,11 @@ def should_skip(args, pdf):
             raise FileExistsError(f"Existing partial/failed output must be retained; use a new run: {output}")
         return False
     metrics = json.loads((output / "metrics.json").read_text())
-    same = (metrics.get("request_mode") == args.request_mode and metrics.get("prompt_id") == PROMPT_ID
+    same = (metrics.get("request_mode") == "page_pool" and metrics.get("prompt_id") == PROMPT_ID
             and metrics["thinking_enabled"] == args.enable_think
             and metrics["dpi"] == args.dpi and metrics["max_tokens_per_request"] == args.max_tokens
             and metrics["model_name"] == args.model_name
-            and (not args.enable_think or metrics.get("thinking_trigger") == "chat_template_only"))
+            and (not args.enable_think or metrics.get("thinking_trigger") == "prompt_suffix"))
     if not args.skip_existing or not same:
         raise FileExistsError(f"Existing result must not be overwritten or reused across profiles: {output}")
     return True
@@ -172,38 +147,15 @@ def record_error(args, pdf, exc):
     output = get_doc_output_dir(args.input_root, args.output_root, pdf)
     append_error_payload(output / "error.json", build_error_payload(
         "Qianfan-OCR", pdf, exception=exc,
-        extra={"backend": "vllm", "request_mode": args.request_mode, "prompt_id": PROMPT_ID},
+        extra={"backend": "vllm", "request_mode": "page_pool", "prompt_id": PROMPT_ID},
     ))
     print(f"[error] {pdf}: {exc}", flush=True)
-
-
-def run_joint(args, client, pdf):
-    if should_skip(args, pdf):
-        return
-    started = time.perf_counter()
-    count = page_count(pdf)
-    with tempfile.TemporaryDirectory(prefix="joint_", dir=temp_root(args)) as temp:
-        with error_context("render"):
-            images, _, _ = render_pdf_pages(pdf, args.dpi, Path(temp))
-            if len(images) != count:
-                raise ValueError("Rendered page count differs from PDF page count")
-        with error_context("inference"):
-            document, record = request(args, client, images)
-        with error_context("export"):
-            pages = split_pages(document, count)
-            boxes, warnings = [], []
-            if pages is not None:
-                for n, (page, image) in enumerate(zip(pages, images), 1):
-                    page_boxes, page_warnings = extract_image_boxes(page, image, n)
-                    boxes.extend(page_boxes)
-                    warnings.extend(page_warnings)
-            export(args, pdf, count, document, pages, [record], boxes, started, warnings=warnings)
 
 
 def run_page(args, client, pdf, page):
     with render_pdf_page(pdf, page, args.dpi, temp_root(args)) as image:
         with error_context("inference", page):
-            text, record = request(args, client, [image])
+            text, record = request(args, client, image)
         with error_context("export", page):
             boxes, warnings = extract_image_boxes(text, image, page)
         record["page_index"] = page

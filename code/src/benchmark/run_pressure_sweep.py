@@ -167,8 +167,9 @@ def build_trial(*, args, method, pressure, gpu_id, trial_index, subset_path, sub
     from config.execution_profiles import resolve_runtime_defaults, runtime_cli_args
     effective = argparse.Namespace(**vars(args))
     resolve_runtime_defaults(effective, method)
-    outer, _, mapping, docs = pressure_mapping(method, pressure, args.qianfan_request_mode,
-                                               args.unlimited_ocr_request_mode)
+    outer, _, mapping, docs = pressure_mapping(
+        method, pressure, unlimited_request_mode=args.unlimited_ocr_request_mode
+    )
     if docs is None:
         docs = int(subset_meta["sample_docs"])
     run_name = f"{args.run_name}_{method}_p{pressure:03d}"

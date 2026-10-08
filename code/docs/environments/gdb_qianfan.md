@@ -2,7 +2,7 @@
 
 ## 用途与版本依据
 
-`qianfan_ocr` / `qianfan_ocr_think`、joint / page_pool共用本环境与同一模型。
+`qianfan_ocr` / `qianfan_ocr_think` 共用本环境与同一模型，当前唯一正式路线是单页请求的 page pool。
 实际核心栈为Python 3.10.20、Torch 2.10.0（cu128）、vLLM 0.18.1、
 Transformers 4.57.6。这是项目已验证组合，不是官方精确锁。
 
@@ -48,5 +48,6 @@ env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 "$QIANFAN_PY" -c \
 默认auto，不传 `--enforce-eager`；显式 `--qianfan-execution-mode eager` 用于诊断/历史复现。
 auto启动应 `env -u TORCHDYNAMO_DISABLE`，避免继承禁用变量；
 是否编译/捕获/使用CUDA graph看服务日志，不能仅凭开关认定更快。
-执行模式与joint/page_pool请求模式独立；参数来源、压力映射和最新测量统一见
-[Qianfan协议](../THROUGHPUT_TUNING_PROTOCOL.md#qianfanjoint-与-page_pool-双路线)。
+执行模式与页面调度独立；参数来源、压力映射和测量口径统一见
+[吞吐协议](../THROUGHPUT_TUNING_PROTOCOL.md)。模型卡基础 prompt 为
+`Parse this document to Markdown.`；think 变体只追加字面量 `<think>`。

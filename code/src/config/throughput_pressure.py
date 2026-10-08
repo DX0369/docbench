@@ -76,16 +76,16 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
     ),
     "qianfan_ocr": PressureSpec(
         "qianfan_ocr",
-        "service_concurrency",
-        "Joint: concurrent document clients. Explicit page_pool: one client, pressure is global inflight pages.",
-        primary_pressure="benchmark_client_workers",
+        "qianfan_page_pool",
+        "One client and service; P bounds global single-page render/request tasks across PDFs.",
+        primary_pressure="inflight_pages",
         secondary_pressure=("vllm_capacity",),
     ),
     "qianfan_ocr_think": PressureSpec(
         "qianfan_ocr_think",
-        "service_concurrency",
-        "Joint: concurrent document clients. Explicit page_pool: one client, pressure is global inflight pages.",
-        primary_pressure="benchmark_client_workers",
+        "qianfan_page_pool",
+        "One client and service; P bounds global single-page render/request tasks across PDFs.",
+        primary_pressure="inflight_pages",
         secondary_pressure=("vllm_capacity",),
     ),
     "deepseek_ocr2": PressureSpec(
@@ -208,7 +208,7 @@ DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
 
 LATENCY_PROFILE_ID = "official_defaults"
 
-# Latency deliberately keeps the four native page-request routes serialized at
+# Latency deliberately keeps the native page-request routes serialized at
 # the page boundary.  This is separate from the throughput pressure mapping:
 # P=1 here is an explicit latency protocol decision, not a claim that every
 # method's internal default concurrency is one.
@@ -217,15 +217,17 @@ PAGE_SERIAL_LATENCY_METHODS = frozenset({
     "hunyuanocr_15",
     "hunyuanocr_15_dflash",
     "deepseek_ocr2",
+    "qianfan_ocr",
+    "qianfan_ocr_think",
 })
 
 
-def pressure_mapping(method: str, pressure: int, qianfan_request_mode: str = "joint",
+def pressure_mapping(method: str, pressure: int,
                      unlimited_request_mode: str = "joint") -> tuple[int, dict[str, Any], dict[str, Any], int | None]:
     if type(pressure) is not int or pressure <= 0:
         raise ValueError("Pressure must be a positive integer")
-    if qianfan_request_mode not in {"joint", "page_pool"} or unlimited_request_mode not in {"joint", "page_pool"}:
-        raise ValueError("Request mode must be joint or page_pool")
+    if unlimited_request_mode not in {"joint", "page_pool"}:
+        raise ValueError("Unlimited request mode must be joint or page_pool")
     spec = PRESSURE_SPECS[method]
     if spec.max_pressure is not None and pressure > spec.max_pressure:
         raise ValueError(f"{method} pressure exceeds its limit of {spec.max_pressure}")
@@ -236,9 +238,8 @@ def pressure_mapping(method: str, pressure: int, qianfan_request_mode: str = "jo
     if method == "unlimited_ocr_sglang" and unlimited_request_mode == "page_pool":
         overrides["unlimited_ocr_page_concurrency"] = pressure
         mapping.update(kind="unlimited_page_pool", primary_pressure="inflight_pages")
-    elif method.startswith("qianfan") and qianfan_request_mode == "page_pool":
+    elif spec.kind == "qianfan_page_pool":
         overrides["qianfan_page_concurrency"] = pressure
-        mapping.update(kind="qianfan_page_pool", primary_pressure="inflight_pages")
     elif spec.kind == "hunyuan_page_pool":
         overrides["hunyuan_page_concurrency"] = pressure
     elif spec.kind == "deepseek_page_pool":
@@ -279,7 +280,6 @@ def pressure_mapping(method: str, pressure: int, qianfan_request_mode: str = "jo
 
 def latency_mapping(
     method: str,
-    qianfan_request_mode: str = "joint",
     unlimited_request_mode: str = "joint",
 ) -> tuple[int, dict[str, Any], dict[str, Any], int | None]:
     """Return the fixed latency profile without applying throughput pressure.
@@ -288,8 +288,6 @@ def latency_mapping(
     above are also serialized at the page boundary; other methods retain their
     official/default internal pipeline settings.
     """
-    if qianfan_request_mode not in {"joint", "page_pool"}:
-        raise ValueError("Qianfan request mode must be joint or page_pool")
     if unlimited_request_mode not in {"joint", "page_pool"}:
         raise ValueError("Unlimited request mode must be joint or page_pool")
     if method not in PRESSURE_SPECS:
@@ -308,13 +306,13 @@ def latency_mapping(
         kind = "latency_page_serial"
         primary = "inflight_pages"
         notes = "Strict page-request latency; one page request at a time."
-    elif method.startswith("qianfan") and qianfan_request_mode == "page_pool":
-        overrides["qianfan_page_concurrency"] = 1
-        kind = "latency_page_serial"
-        primary = "inflight_pages"
-        notes = "Project page_pool fallback; one page request at a time."
     elif method in PAGE_SERIAL_LATENCY_METHODS:
-        field = "hunyuan_page_concurrency" if method.startswith("hunyuanocr") else "deepseek_page_concurrency"
+        if method.startswith("hunyuanocr"):
+            field = "hunyuan_page_concurrency"
+        elif method.startswith("qianfan"):
+            field = "qianfan_page_concurrency"
+        else:
+            field = "deepseek_page_concurrency"
         overrides[field] = 1
         kind = "latency_page_serial"
         primary = "inflight_pages"
