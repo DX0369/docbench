@@ -43,6 +43,7 @@ ENV_BY_METHOD = {
     "monkeyocr_pro_1_2b": ("gdb_monkey",),
     "mineru_303_2509": ("gdb_mineru_303",),
     "mineru_344_2605": ("gdb_mineru",),
+    "mineru_4011_standard": ("gdb_mineru_4",),
     "youtu": ("gdb_youtu",),
     "marker": ("gdb_marker",),
     "pp_structurev3": ("gdb_paddle",),
@@ -235,6 +236,14 @@ def check_method_models(
         version = get_method_version(method)
         for path in (version.model_path, *version.additional_model_paths):
             add_path_check(results, method, path.name, path)
+    elif method == "mineru_4011_standard":
+        version = get_method_version(method)
+        for path in (version.model_path, *version.additional_model_paths):
+            add_path_check(results, method, path.name, path)
+        marker = version.model_path / ".mineru_complete"
+        ok = marker.is_file()
+        results.append(CheckResult(method, "official VLM completion marker", str(marker),
+                                   "ok" if ok else "missing", "present" if ok else "run official models download/verify"))
     elif method.startswith("mineru"):
         version = get_method_version(method)
         add_path_check(

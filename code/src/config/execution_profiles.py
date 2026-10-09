@@ -153,6 +153,12 @@ EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
         ("MinerU 3.4.x parser runtime",),
     ),
     ExecutionProfile(
+        "mineru_4011_standard_v1_api", "mineru_4011_standard",
+        "integrated_parser_runtime", "mineru_v1_jobs",
+        ("MinerU 4.0.11 Torch models and shared AsyncLLM",),
+        ("CPU-only document SDK clients",),
+    ),
+    ExecutionProfile(
         "youtu_native",
         "youtu",
         "integrated_parser_runtime",
@@ -202,6 +208,7 @@ DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
     "unlimited_ocr_sglang": "unlimited_ocr_sglang_service",
     "mineru_303_2509": "mineru_303_2509_api",
     "mineru_344_2605": "mineru_344_2605_api",
+    "mineru_4011_standard": "mineru_4011_standard_v1_api",
     "monkeyocr_pro_3b": "monkeyocr_pro_3b_vllm_async_multifile",
     "monkeyocr_pro_1_2b": "monkeyocr_pro_1_2b_vllm_async_multifile",
     "paddleocr_vl_15": "paddleocr_vl_15_multi_pdf_queue",
@@ -353,6 +360,10 @@ def runtime_keys(method):
         groups = ("monkey",)
     elif method in ("mineru_303_2509", "mineru_344_2605"):
         groups = ("mineru",)
+    elif method == "mineru_4011_standard":
+        # P is recorded in pressure_mapping; all other runtime settings are
+        # fixed official defaults, not the 3.x flags or memory budget.
+        groups = ()
     else:
         groups = {"deepseek_ocr2": ("deepseek",), "glmocr": ("glm",), "youtu": ("youtu",),
                   "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": (),

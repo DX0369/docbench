@@ -3,6 +3,8 @@
 本文档只维护迁移后可直接复制的运行命令。环境安装见
 [`environments/`](environments/README.md)，模型下载见 [`MODELS.md`](MODELS.md)，
 吞吐口径和失败规则见 [`THROUGHPUT_TUNING_PROTOCOL.md`](THROUGHPUT_TUNING_PROTOCOL.md)。
+本页只保留可复用命令模板；实际运行记录和结果见
+[`PROJECT_STATE.md`](../../PROJECT_STATE.md)。
 
 ## 公共变量
 
@@ -73,16 +75,17 @@ run_fixed jina_ocr_v1 1             # 复用 DFlash 环境；自动指定 CUDA 1
 | `qianfan_ocr` | vLLM 单页 page pool | 页面在途数 |
 | `qianfan_ocr_think` | vLLM 单页 page pool | 页面在途数 |
 | `unlimited_ocr_sglang` | SGLang joint 或 page pool | 文档客户端数或页面在途数 |
-| `monkeyocr_pro_3b` | vLLM async multifile | 文档内区域在途数 |
-| `monkeyocr_pro_1_2b` | vLLM async multifile | 文档内区域在途数 |
-| `paddleocr_vl_15` | 官方多 PDF queue pipeline | 区域识别请求并发 |
-| `paddleocr_vl_16` | 官方多 PDF queue pipeline | 区域识别请求并发 |
-| `glmocr` | 单 pipeline 区域 worker | 区域识别 worker 数 |
+| `monkeyocr_pro_3b` | vLLM async multifile | 分组内区域识别并发上限 |
+| `monkeyocr_pro_1_2b` | vLLM async multifile | 分组内区域识别并发上限 |
+| `paddleocr_vl_15` | 官方多 PDF queue pipeline | 区域识别并发上限（异步 HTTP） |
+| `paddleocr_vl_16` | 官方多 PDF queue pipeline | 区域识别并发上限（异步 HTTP） |
+| `glmocr` | 单 pipeline 区域 worker | 区域识别并发上限（HTTP 线程池） |
 | `mineru_303_2509` | MinerU 3.0.3 API | API 客户端/任务上限 |
 | `mineru_344_2605` | MinerU 3.4.x API | API 客户端/任务上限 |
+| `mineru_4011_standard` | MinerU 4.0.11 Standard V1 API | 文档客户端数及官方服务 `--concurrency` |
 | `pp_structurev3` | 单 pipeline page prefetch | 原生 batch 缩放 |
 | `marker` | shared model workers | 文档 worker 数 |
-| `youtu` | native resident parser | query batch |
+| `youtu` | native resident parser | 同页单次文字查询包含的 bbox 数 |
 | `teleocr_vllm_async` | resident TeleOCR vLLM async pipeline | 当前 PDF 内共享的 layout/region 请求并发 |
 | `lightonocr2_1b` | official vLLM single-page page pool | 跨 PDF 的页面在途数；每个请求固定一张图片 |
 | `xiaomi_ocr_0` | official batch whole-page + vLLM page pool | 跨 PDF 的页面渲染／请求在途数；不登记 region 或 joint |
@@ -226,7 +229,7 @@ Qianfan 直接搜索单页 page_pool；Unlimited 的 `page_pool` 仍不能把
 ## Xiaomi-OCR-0：整页路线
 
 仅接入官方整页解析，不启用 PP-DocLayoutV3、region 或 joint。服务和 worker
-默认复用 `gdb_glmocr`；环境没有新增安装或升级，GPU 6 两 PDF 的 P1/P2 与 latency smoke 已通过，尚未进行正式调参。
+默认复用 `gdb_glmocr`。
 复用官方 batch prompt、RGB/最长边 2048px 图像编码和 Markdown 后处理；
 PDF 渲染使用项目指定的 200 DPI。生成上限 16384、temperature 0、top_p 0.8、
 thinking 关闭、请求超时 600 秒；服务上下文 32768 是项目设置。
@@ -328,7 +331,6 @@ Latency 模式只改变文档之间的调度：runtime/service 只启动一次�
 
 环境见 [gdb_jinaocr](environments/gdb_jinaocr.md)。仅 page pool，不注册 joint。
 固定官方严格 benchmark prompt，FastMTP `eagle` K=3。
-GPU 3 的同步、P1/P2 和 latency smoke 已通过；未正式调参。
 默认复用 DFlash 环境，工具链见环境说明；smoke 的 FlashInfer workspace 也应指向 tmp。
 
 ```bash
@@ -382,7 +384,7 @@ Marker、Youtu 和 PP-StructureV3 使用 native 入口。`inputs/native/` 中应
 latency 模式固定使用单 GPU、单 worker，不生成 `job_*.txt`；每个方法的
 `latency_summary.json` 应记录两个文档且顺序为 1、2。
 
-## MinerU-Popo（不参与当前吞吐定版）
+## MinerU-Popo 组合入口
 
 Popo 仍保留独立 native 组合入口，不能使用上述 `run_fixed`：
 

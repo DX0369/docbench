@@ -1,6 +1,7 @@
 # 方法环境安装配方
 
-Jina-OCR-v1 环境复用说明见 [gdb_jinaocr.md](gdb_jinaocr.md)：已在 DFlash 环境完成 GPU smoke，无包修改。
+Jina-OCR-v1 环境复用说明见 [gdb_jinaocr.md](gdb_jinaocr.md)。实验进展和结果统一见
+[PROJECT_STATE.md](../../../PROJECT_STATE.md)，不在安装配方中重复记录。
 
 本目录是环境安装和迁移的唯一入口：本文件维护通用设置，各环境配方维护自己的版本、安装命令和已知问题。运行命令见 [RUN_COMMANDS.md](../RUN_COMMANDS.md)，吞吐规则见 [THROUGHPUT_TUNING_PROTOCOL.md](../THROUGHPUT_TUNING_PROTOCOL.md)。
 
@@ -47,7 +48,8 @@ rg -n -i \
 - 可选组件与实际硬依赖，最终以真实 import/model smoke 为准。
 
 如果官方 README、包元数据和实际 import 相互矛盾，保留错误日志，在独立环境中做
-最小修正，并把最终验证结果写回对应环境配方。不要为了消除一条元数据警告而覆盖
+最小修正，将安装所需的兼容修正写回配方，实验结论记录在 `PROJECT_STATE.md`。
+不要为了消除一条元数据警告而覆盖
 整套 Torch/vLLM/Transformers 栈。
 
 ## 迁移时的安装流程
@@ -56,13 +58,14 @@ rg -n -i \
 2. 按 `config/methods.json` checkout 第三方源码。
 3. 按本目录逐环境创建 Miniconda 命名环境，不在 `base` 安装方法依赖。
 4. 按 [MODELS.md](../MODELS.md) 下载模型并准备 Marker、PaddleX、MinerU 项目缓存。
-5. 按需要运行 readiness、smoke 或吞吐测试；这些步骤分别记录在对应文档中。
+5. 按通用运行模板完成必要的 readiness、smoke 或吞吐验证；进展和结论记录在 `PROJECT_STATE.md`。
 
 锁文件只用于迁移后的版本核对，不是每次安装结束都必须重新导出的产物。
 
 各配方应分别说明：**官方要求**（对应 backend 和源码 revision）、**项目选定版本**
-（范围内锁定或有说明的兼容修正）、**实际验证范围**（import、smoke 或有界吞吐）。
-三者不能互相替代，项目补丁也不能描述成未经修改的官方实现。
+（范围内锁定或有说明的兼容修正）和必要的安装约束。
+实验验证范围单独维护于 `PROJECT_STATE.md`；包版本符合依赖不代表推理或吞吐已验证，
+项目补丁也不能描述成未经修改的官方实现。
 
 ## 目录与命名
 
@@ -131,15 +134,16 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 
 ## 环境矩阵
 
-| 环境 | 方法 | Python | 已验证关键版本 | 版本依据 |
+| 环境 | 方法 | Python | 当前锁定关键版本 | 版本依据 |
 |---|---|---:|---|---|
 | `gdb_hunyuan` | HunyuanOCR 1.0/1.5 release vLLM | 3.10 | vLLM 0.18.1 | 官方顶层精确约束 |
-| `gdb_hunyuan_dflash` | HunyuanOCR-1.5 DFlash | 3.12 | vLLM dev869；Torch 2.11 cu130；Transformers 5.5.3；FlashInfer 0.6.13 | 官方验证区间 + 精确历史 wheel + 3090 smoke |
+| `gdb_hunyuan_dflash` | HunyuanOCR-1.5 DFlash | 3.12 | vLLM dev869；Torch 2.11 cu130；Transformers 5.5.3；FlashInfer 0.6.13 | 官方验证区间 + 精确历史 wheel + 项目 3090 兼容组合 |
 | `gdb_youtu` | Youtu-Parsing native HF | 3.10 | Torch 2.6.0；Transformers 4.51.3 | 官方精确锁定 |
 | `gdb_marker` | Marker 1.7.5 | 3.10.20 | Torch 2.7.0+cu126；Transformers 4.53.3；Surya 0.14.7 | 锁定 fork 依赖范围＋项目已验证版本 |
-| `gdb_mineru` | MinerU 3.4.x/2605 API/direct；Popo vLLM服务 | 3.10 | MinerU 3.4.3；Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 官方范围 + 项目已验证版本；Popo单服务及双服务小smoke通过，20文档仍有容量/上下文/建树失败 |
-| `gdb_mineru_303` | MinerU 3.0.3/2509 API/direct | 3.10 | Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 原始路线显式版本；API/direct 单页 smoke |
-| `gdb_mineru_popo` | MinerU-Popo CPU API客户端/后处理，保留历史TF依赖 | 3.10 | 原Torch/Transformers不变；新增loguru 0.7.3 | CPU导入及组合小smoke通过；20文档P=1/2/4未全通过，尚无稳定配置 |
+| `gdb_mineru` | MinerU 3.4.x/2605 API；Popo vLLM 服务 | 3.10 | MinerU 3.4.3；Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 官方范围 + 项目锁定组合 |
+| `gdb_mineru_303` | MinerU 3.0.3/2509 API | 3.10 | Torch 2.9.0；Transformers 4.57.6；vLLM 0.11.2 | 原始路线显式版本与独立环境 |
+| `gdb_mineru_4` | MinerU 4.0.11 Standard V1 API | 3.10.20 | Torch 2.11.0；Transformers 5.14.1；vLLM 0.20.0；docvortex 0.5.13 | 官方 full wheel + 项目锁定组合；独立环境，不覆盖 3.x |
+| `gdb_mineru_popo` | MinerU-Popo CPU API客户端/后处理，保留历史TF依赖 | 3.10 | 原Torch/Transformers不变；新增loguru 0.7.3 | 官方依赖与项目 CPU 客户端缺包补充 |
 | `gdb_glmocr` | GLM-OCR service/pipeline；LightOnOCR-2-1B、Xiaomi-OCR-0、WeVisDoc-2B service/worker | 3.10 | Torch 2.11.0 cu130；Transformers 5.14.1；vLLM 0.20.0 | 官方下界 + 项目已验证版本；已知 xgrammar 冲突 |
 | `gdb_paddle` | PP-StructureV3、PaddleOCR-VL pipeline/client | 3.10 | PaddlePaddle GPU 3.2.1 cu126；PaddleX 3.7.x | 官方精确/范围约束 |
 | `gdb_paddle_vllm` | PaddleOCR-VL vLLM service | 3.10 | Torch 2.8.0 cu128；Transformers 4.57.6；vLLM 0.10.2 | 官方动态配方 + 项目已验证解析结果 |
@@ -148,7 +152,7 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 | `gdb_qianfan` | Qianfan OCR / think | 3.10 | Torch 2.10.0 cu128；Transformers 4.57.6；vLLM 0.18.1 | 官方未锁版本；项目已验证版本 |
 | `gdb_teleocr` | TeleOCR vllm-async-engine | 3.10 | Torch 2.8.0；Transformers 4.57.1；vLLM 0.11.0；xformers 0.0.32 | 官方 requirements/插件；排除可选 Gradio UI 冲突依赖 |
 | `gdb_glmocr`（LightOnOCR-2 复用） | GLM-OCR；LightOnOCR-2-1B vLLM page pool | 3.10 | Torch 2.11.0；Transformers 5.14.1；vLLM 0.20.0；Pillow；pypdfium2 5.12.1 | LightOnOCR-2 不重复安装依赖；当前不创建独立环境 |
-| `gdb_unlimited_ocr_sglang` | Unlimited OCR 官方定制SGLang service | 3.12.13 | SGLang dev11416；Torch 2.9.1 cu128；Transformers 5.3.0；FlashInfer 0.6.7.post3 | 官方定制wheel＋SM86补丁；安装见配方，验证范围见smoke，测量见吞吐协议 |
+| `gdb_unlimited_ocr_sglang` | Unlimited OCR 官方定制SGLang service | 3.12.13 | SGLang dev11416；Torch 2.9.1 cu128；Transformers 5.3.0；FlashInfer 0.6.7.post3 | 官方定制 wheel＋项目 SM86 兼容补丁 |
 
 可选比较环境见 [gdb_hunyuan_optional.md](gdb_hunyuan_optional.md)。Hunyuan DFlash 和 native Transformers 与 release vLLM 明确不兼容，不应装进 `gdb_hunyuan`。
 
@@ -160,7 +164,8 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 - [gdb_marker.md](gdb_marker.md)
 - [gdb_mineru.md](gdb_mineru.md)
 - [gdb_mineru_303.md](gdb_mineru_303.md)
-- [gdb_mineru_popo.md](gdb_mineru_popo.md)：当前CPU API客户端与历史TF环境；旧smoke不能替代新共享vLLM验证。
+- [gdb_mineru_4.md](gdb_mineru_4.md)：独立 4.0.11 wheel 环境，Standard/Torch/vLLM V1 API。
+- [gdb_mineru_popo.md](gdb_mineru_popo.md)：当前 CPU API 客户端与保留历史 TF 依赖的环境配方。
 - [gdb_glmocr.md](gdb_glmocr.md)
 - [gdb_paddle.md](gdb_paddle.md)
 - [gdb_paddle_vllm.md](gdb_paddle_vllm.md)

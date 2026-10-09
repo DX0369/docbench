@@ -279,6 +279,28 @@ modelscope download \
 也可使用官方 `mineru-models-download --source modelscope --model_type all` 管理下载，
 但不要同时维护重复权重；不同版本环境仍需选择正确的 checkpoint。
 
+### MinerU 4.0.11 Standard
+
+`mineru_4011_standard` 使用新版小模型包和原 2605 VLM；在独立
+`gdb_mineru_4` 环境中用官方 downloader 准备，不能使用旧 3.x 下载命令：
+
+```bash
+conda activate gdb_mineru_4
+type unsetproxy >/dev/null 2>&1 && unsetproxy
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+export PYTHONNOUSERSITE=1
+export MINERU_MODEL_BASE_DIR="$GDB_MODEL_ROOT/mineru"
+
+mineru-kit models download --tier standard \
+  --small-backend torch --vlm-engine vllm --source modelscope
+mineru-kit models verify --tier standard --small-backend torch --vlm-engine vllm
+```
+
+实际目录为 `mineru/MinerU-4_models_torch` 和 `mineru/MinerU2.5-Pro-2605-1.2B`。
+后者与 3.4.x 共用，不复制另一份；已有文件必须经官方 downloader 确认，
+不要手工创建 `.mineru_complete`。两包已通过官方 verify，但这不证明 GPU 推理通过。
+运行时自动设置 `source=local`，无需网络补模型，也不读取旧 `mineru.json`。
+
 ### Youtu-Parsing
 
 目前未确认 Youtu-Parsing 存在可用的 ModelScope 模型仓库，使用官方 Hugging Face仓库：

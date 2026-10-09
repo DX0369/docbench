@@ -60,7 +60,8 @@ python src/validation/check_method_versions.py \
 ```
 
 它核对方法 ID、模型、源码 HEAD、兼容源码历史 revision、adapter、环境和 active 注册。
-审计通过不代表模型推理成功；实际推理应使用 `RUN_COMMANDS.md` 中的正式入口，并按吞吐协议记录结果。
+审计通过不代表模型推理成功；实际推理应使用 `RUN_COMMANDS.md` 中的正式入口，
+遵循吞吐协议，并将进展与简要结论记录在 `PROJECT_STATE.md`。
 
 ## 升级流程
 
@@ -74,7 +75,8 @@ python src/validation/check_method_versions.py \
 6. 更新验证状态和必要的 adapter/config；
 7. 提交源码映射、代码修改和验证说明，不把一个版本的质量与另一个版本的吞吐混在一起。
 
-源码同步本身不证明兼容，也不自动应用本项目补丁。补丁、环境和 smoke 结果必须沿各自文档维护。
+源码同步本身不证明兼容，也不自动应用本项目补丁。环境配方维护必要补丁和安装要求，
+实验进展、smoke 结果与已知限制统一维护于 [PROJECT_STATE.md](../../PROJECT_STATE.md)。
 
 ## 必须保留的版本例外
 
@@ -85,6 +87,10 @@ python src/validation/check_method_versions.py \
   `mineru-3.0.3-released` tag 的 `version.py` 仍写作 3.0.2，不能只依据 tag 名称；
 - 旧版需要 `pdfium_image_bounds.patch`，新版 3.4.x 不应用该补丁；
 - 旧的含糊 `mineru` runnable ID 不进入正式调度。
+- `mineru_4011_standard` 独立使用官方 PyPI 4.0.11 wheel、V1 API、新小模型包和原 2605 VLM。
+  `third_party/methods/mineru4` 是 release tag 的参考快照，不用于 runtime import；
+  该 tag 的版本文件仍写 4.0.10，与安装包比对仅版本文件不同，明确标为 `reference_checkout`。
+  不替换旧两版 API 或 Popo 绑定。
 
 ### HunyuanOCR
 

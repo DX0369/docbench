@@ -19,6 +19,10 @@
 锁目录名称是历史导出批次，不代表所有文件同日导出。依赖发生实际变化后才更新对应快照；
 仅修改代码或文档时不重新导出。
 
+`gdb_mineru_4.*` 为用户创建的 MinerU 4.0.11 独立环境的首次快照。
+配方见 [gdb_mineru_4.md](../code/docs/environments/gdb_mineru_4.md)；
+MinerU 的本机 wheel 路径只记录安装来源，迁移时重新下载该版本，不直接 replay 临时路径。
+
 Xiaomi-OCR-0 与 LightOnOCR-2-1B 复用 `gdb_glmocr`，对应
 [`gdb_glmocr.explicit.txt`](locks_rtx3090_20260720/gdb_glmocr.explicit.txt)、
 [`gdb_glmocr.pip-freeze.txt`](locks_rtx3090_20260720/gdb_glmocr.pip-freeze.txt) 和

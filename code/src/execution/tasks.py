@@ -36,6 +36,7 @@ from methods.mineru.commands import (
 )
 from methods.mineru.versions.v303_2509 import PROFILE as MINERU_303_2509
 from methods.mineru.versions.v344_2605 import PROFILE as MINERU_344_2605
+from methods.mineru.versions import v4011_standard as mineru4
 from methods.monkeyocr.commands import (
     build_pro_1_2b_runner as build_monkey_pro_1_2b_runner,
     build_pro_1_2b_worker as build_monkey_pro_1_2b_worker,
@@ -117,6 +118,8 @@ def uses_local_managed_service(config: ServiceTask, args: argparse.Namespace) ->
 def managed_service_identity(method_id: str, command: list[str], port: int) -> dict:
     """Derive identity from the final command and the existing version profile."""
     base = f"http://127.0.0.1:{port}"
+    if method_id == mineru4.METHOD_ID:
+        return {"identity_url": base + "/v1/health", "expected_fields": {"version": mineru4.VERSION}}
     if method_id in MINERU_PROFILES:
         profile = MINERU_PROFILES[method_id]
         return {"identity_url": base + "/ready", "expected_fields": {
@@ -127,6 +130,12 @@ def managed_service_identity(method_id: str, command: list[str], port: int) -> d
 
 
 SERVICE_TASKS: dict[str, ServiceTask] = {
+    mineru4.METHOD_ID: ServiceTask(
+        method_id=mineru4.METHOD_ID, runner_env=mineru4.CONDA_ENV,
+        worker_builder=mineru4.build_worker, service_builder=mineru4.build_service,
+        healthcheck_builder=mineru4.healthcheck_url, docs_per_job=1,
+        env_overrides=mineru4.environment_overrides(),
+    ),
     "jina_ocr_v1": ServiceTask(
         method_id="jina_ocr_v1", runner_env="gdb_hunyuan_dflash",
         worker_builder=build_jina_worker, docs_per_job=8,

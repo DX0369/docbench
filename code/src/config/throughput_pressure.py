@@ -15,6 +15,7 @@ PressureKind = Literal[
     "glm_internal_workers",
     "youtu_query_batch",
     "mineru_api_tasks",
+    "mineru_v1_jobs",
     "popo_document_clients",
     "native_workers",
     "pp_page_batch",
@@ -158,6 +159,13 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
         primary_pressure="api_clients_and_max_concurrent_requests",
         secondary_pressure=("processing_window_size", "hybrid_batch_ratio"),
     ),
+    "mineru_4011_standard": PressureSpec(
+        "mineru_4011_standard", "mineru_v1_jobs",
+        "One official 4.0.11 Standard V1 service; P document clients share its resident models.",
+        primary_pressure="document_clients_and_api_concurrency",
+        secondary_pressure=("official_window_64", "official_component_batches", "official_vlm_concurrency_100"),
+        default_pressures=(1, 2, 4),
+    ),
     "mineru_344_2605_popo": PressureSpec(
         "mineru_344_2605_popo",
         "popo_document_clients",
@@ -169,14 +177,14 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
     "monkeyocr_pro_3b": PressureSpec(
         "monkeyocr_pro_3b",
         "monkey_region_concurrency",
-        "One vllm_async runtime; pressure bounds in-flight regions within each document.",
+        "One vllm_async runtime; pressure bounds in-flight regions within each input group.",
         primary_pressure="inflight_regions",
         secondary_pressure=(),
     ),
     "monkeyocr_pro_1_2b": PressureSpec(
         "monkeyocr_pro_1_2b",
         "monkey_region_concurrency",
-        "One vllm_async runtime; pressure bounds in-flight regions within each document.",
+        "One vllm_async runtime; pressure bounds in-flight regions within each input group.",
         primary_pressure="inflight_regions",
         secondary_pressure=(),
     ),
@@ -221,6 +229,7 @@ DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
     "paddleocr_vl_15",
     "glmocr",
     "mineru_344_2605",
+    "mineru_4011_standard",
     "monkeyocr_pro_1_2b",
     "pp_structurev3",
     "marker",
@@ -298,6 +307,9 @@ def pressure_mapping(method: str, pressure: int,
         docs = 1
     elif spec.kind == "mineru_api_tasks":
         overrides["mineru_api_max_concurrent_requests"] = pressure
+        outer, docs = pressure, 1
+    elif spec.kind == "mineru_v1_jobs":
+        overrides["mineru4_concurrency"] = pressure
         outer, docs = pressure, 1
     elif spec.kind == "popo_document_clients":
         overrides.update(popo_concurrency=pressure, mineru_api_max_concurrent_requests=pressure)
@@ -401,6 +413,10 @@ def latency_mapping(
         overrides["marker_workers"] = 1
         primary = "shared_model_document_workers"
         notes = "One model-owning Marker worker and one PDF at a time."
+    elif method == "mineru_4011_standard":
+        overrides["mineru4_concurrency"] = 1
+        primary = "official_v1_api_defaults"
+        notes = "One PDF client; official V1 job concurrency=1, native window/batches/VLM limits unchanged."
     elif method in {"mineru_303_2509", "mineru_344_2605"}:
         # MinerU's API defaults are upstream-owned (currently max requests=3
         # and processing window=64); do not turn them into a project P=1

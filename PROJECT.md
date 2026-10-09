@@ -1,6 +1,6 @@
 # 项目说明
 
-更新时间：2026-10-08 23:12 +08:00
+更新时间：2026-10-09 16:42 +08:00
 
 ## 研究目标与范围
 
@@ -36,11 +36,9 @@ GlobalDocBench 用统一的多页 PDF 输入，比较文档解析方法的准确
 - 正式吞吐默认使用一张 GPU。方法可根据自身机制使用页面任务、文档客户端、区域请求或原生 batch 作为压力参数，但不强行把 P 解释成同一种内部量。
 - 计时、ready、成功/失败和输出保存遵循统一协议；失败必须显式记录，不能通过静默 fallback 或弱化校验隐藏。
 - Git 管理代码、第三方源码、环境配方与锁文件及项目文档；模型权重、实际运行环境、输入数据、实验产物、缓存、临时文件和 `archive/` 由忽略规则排除。
-- 不在当前项目状态文档中重复保存方法参数、实验曲线或环境安装细节；这些信息只维护在对应配置和专题文档中。
+- 方法参数和环境安装细节只维护在对应配置和专题文档中；实验进展、简短结论和下一步只维护在 `PROJECT_STATE.md`，不复制完整曲线或逐次日志。
 
 ## 正式配置位置
-
-Jina-OCR-v1 单页 FastMTP 路线已通过 GPU 3 smoke，复用 DFlash 环境；尚未正式调参。
 
 - `code/config/methods.json`：方法版本与第三方源码的统一清单，记录正式 method ID、模型、环境、adapter，以及仓库 URL、本地目录和精确 revision。
 - `code/src/config/execution_profiles.py`：正式执行路线及运行参数登记。
@@ -51,12 +49,12 @@ Jina-OCR-v1 单页 FastMTP 路线已通过 GPU 3 smoke，复用 DFlash 环境；
 
 ## 文档职责
 
-- [`PROJECT_STATE.md`](PROJECT_STATE.md)：当前阶段、实验状态、有效限制和下一步。
+- [`PROJECT_STATE.md`](PROJECT_STATE.md)：唯一的人工实验进展与简要结论记录，包含当前阶段、有效限制和下一步。
 - `code/README.md`：代码导航和 Git 工作流。
 - `code/docs/environments/`：各方法环境的安装和迁移命令。
 - `code/docs/MODELS.md`：模型来源、版本和下载方式。
-- `code/docs/RUN_COMMANDS.md`：可复制的运行入口；验证边界和吞吐规则见吞吐协议。
-- `code/docs/THROUGHPUT_TUNING_PROTOCOL.md`：吞吐测试规则、压力映射和实验记录。
+- `code/docs/RUN_COMMANDS.md`：可复制的通用运行模板，不维护逐次测试命令或结果。
+- `code/docs/THROUGHPUT_TUNING_PROTOCOL.md`：吞吐测试规则、方法运行机制和压力映射，不维护实验记录。
 - `code/docs/METHOD_REPOSITORY_UPGRADES.md`：源码同步、revision 审计和版本区别。
 
 根目录的 `PROJECT.md` 与 `PROJECT_STATE.md` 是项目级说明；主实现和可迁移操作说明位于 `code/`，均由项目根目录的 Git 仓库统一管理。

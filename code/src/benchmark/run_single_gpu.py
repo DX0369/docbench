@@ -171,6 +171,10 @@ def _build_worker_env_overrides(
     env: dict[str, str] = {"CUDA_VISIBLE_DEVICES": str(base_args.gpu_id)}
     env.update(method_spec.env_overrides)
 
+    if method == "mineru_4011_standard":
+        # SDK clients submit PDFs; only the managed server owns GPU models.
+        env["CUDA_VISIBLE_DEVICES"] = ""
+
     if method.startswith("mineru"):
         env["HF_ENDPOINT"] = "https://hf-mirror.com"
 
@@ -235,7 +239,7 @@ def start_vllm_service(
     env_overrides.update(method_spec.env_overrides)
     disable_dynamo = (args.hunyuan_vllm_enforce_eager if method in AR_GPU_MEMORY_DEFAULTS
                       else method != "hunyuanocr_15_dflash")
-    if method in {"deepseek_ocr2", "glmocr", "lightonocr2_1b", "xiaomi_ocr_0"} or method in MINERU_PROFILES:
+    if method in {"deepseek_ocr2", "glmocr", "lightonocr2_1b", "xiaomi_ocr_0", "mineru_4011_standard"} or method in MINERU_PROFILES:
         # Preserve the official model/vLLM compilation defaults.
         disable_dynamo = False
     if method in {"paddleocr_vl_15", "paddleocr_vl_16"}:
@@ -272,6 +276,8 @@ def start_vllm_service(
 
 
 def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
+    if method == "mineru_4011_standard":
+        return True
     if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b"}:
         return True
     if method == "mineru_344_2605_popo":

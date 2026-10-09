@@ -4,6 +4,16 @@
   "note": "Repositories pin runtime checkout revisions once. Variants reference source_repository_id; historical_source_revision and source_binding distinguish historical provenance from compatibility source. Local patch requirements remain recorded in notes.",
   "repositories": [
     {
+      "id": "mineru4",
+      "path": "third_party/methods/mineru4",
+      "url": "https://github.com/opendatalab/MinerU.git",
+      "ref": "refs/tags/mineru-4.0.11-released",
+      "update_ref": "refs/tags/mineru-4.0.11-released",
+      "revision": "f232373fb319d63e82aefd30be40a2ccc6005d73",
+      "release": "4.0.11",
+      "notes": "Reference release source: tag version.py reports 4.0.10; comparison with installed 4.0.11 package differs only in version.py. Runtime uses the official PyPI mineru==4.0.11 wheel, not this checkout."
+    },
+    {
       "id": "xiaomi_ocr",
       "path": "third_party/methods/Xiaomi-OCR-0",
       "url": "https://github.com/SeerRay-Lab/Xiaomi-OCR-0.git",
@@ -143,6 +153,23 @@
     }
   ],
   "variants": [
+    {
+      "method_id": "mineru_4011_standard",
+      "family_id": "mineru",
+      "display_name": "MinerU 4.0.11 Standard + MinerU2.5-Pro-2605-1.2B",
+      "official_checkpoint": "OpenDataLab/MinerU2.5-Pro-2605-1.2B",
+      "model_path": "mineru/MinerU2.5-Pro-2605-1.2B",
+      "additional_model_paths": ["mineru/MinerU-4_models_torch"],
+      "model_required": true,
+      "source_repository_id": "mineru4",
+      "source_binding": "reference_checkout",
+      "adapter_module": "methods.mineru.versions.v4011_standard",
+      "conda_environments": ["gdb_mineru_4"],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "gpu6_p1_p2_smoke_verified",
+      "notes": "Official PyPI 4.0.11 runtime, Standard/Torch/local vLLM V1 API; release checkout is reference only. P controls document clients and --concurrency. Official preload, window/batches, VLM concurrency and compilation defaults. Full document rendering preserves cross-page joins. Experiment history and verification scope are recorded only in PROJECT_STATE.md; no optimal throughput claim."
+    },
     {
       "method_id": "jina_ocr_v1",
       "family_id": "jina_ocr",
