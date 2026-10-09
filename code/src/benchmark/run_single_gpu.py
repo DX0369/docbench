@@ -272,7 +272,7 @@ def start_vllm_service(
 
 
 def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
-    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1"}:
+    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b"}:
         return True
     if method == "mineru_344_2605_popo":
         return True  # The combination coordinator owns its inner ready/start/done.
@@ -416,7 +416,7 @@ def run_trial(
         if concurrency != 1:
             raise ValueError("Hunyuan page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)
-    if method in {"lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1"}:
+    if method in {"lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b"}:
         if concurrency != 1:
             raise ValueError(f"{method} page pool requires one outer worker; use --pressure")
         docs_per_job = len(pdf_paths)

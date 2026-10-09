@@ -73,6 +73,11 @@ from methods.xiaomi_ocr.commands import (
     build_worker as build_xiaomi_worker,
     healthcheck_url as xiaomi_healthcheck_url,
 )
+from methods.wevisdoc.commands import (
+    build_service as build_wevisdoc_service,
+    build_worker as build_wevisdoc_worker,
+    healthcheck_url as wevisdoc_healthcheck_url,
+)
 from methods.marker.commands import build_worker as build_marker_worker
 from methods.pp_structurev3.commands import build_worker as build_ppstructure_worker
 from methods.mineru_popo.commands import build_worker as build_mineru_popo_worker
@@ -156,6 +161,21 @@ SERVICE_TASKS: dict[str, ServiceTask] = {
             "PYTHONNOUSERSITE": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
             "TOKENIZERS_PARALLELISM": "false",
+        },
+    ),
+    "wevisdoc_2b": ServiceTask(
+        method_id="wevisdoc_2b",
+        runner_env="gdb_glmocr",
+        worker_builder=build_wevisdoc_worker,
+        service_builder=build_wevisdoc_service,
+        healthcheck_builder=wevisdoc_healthcheck_url,
+        docs_per_job=1,
+        env_overrides={
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "TOKENIZERS_PARALLELISM": "false",
+            "HF_HUB_OFFLINE": "1",
+            "TRANSFORMERS_OFFLINE": "1",
         },
     ),
     "hunyuanocr_10": ServiceTask(

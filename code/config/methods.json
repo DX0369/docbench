@@ -20,6 +20,14 @@
       "revision": "1e71f4fe792d12bbb86d2671c5ed6f3a1499b27d"
     },
     {
+      "id": "wevisdoc",
+      "path": "third_party/methods/WeVisDoc",
+      "url": "https://github.com/Tencent/WeVisDoc.git",
+      "ref": "main",
+      "update_ref": "main",
+      "revision": "bcbc0eacb976ecb8d69675fe6bcee123f5640777"
+    },
+    {
       "id": "mineru_popo",
       "path": "third_party/methods/MinerU-Popo",
       "url": "https://github.com/opendatalab/MinerU-Popo.git",
@@ -204,6 +212,23 @@
       "role": "current_candidate",
       "validation_status": "assets_ready_adapter_not_smoked",
       "notes": "Official vLLM single-page route. The model card limits each prompt to one image; P is global in-flight page requests across PDFs. No whole-document joint profile is registered. Official serving settings are limit-mm-per-prompt image=1, processor cache 0 and prefix caching disabled; generation uses max_tokens=4096, temperature=0.2 and top_p=0.9. The current adapter reuses gdb_glmocr until a real vLLM model-start smoke proves that its locked vLLM version supports this architecture."
+    },
+    {
+      "method_id": "wevisdoc_2b",
+      "family_id": "wevisdoc",
+      "display_name": "WeVisDoc-2B",
+      "official_checkpoint": "Tencent/WeVisDoc-2B",
+      "model_path": "WeVisDoc-2B",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "wevisdoc",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.wevisdoc.commands",
+      "conda_environments": ["gdb_glmocr"],
+      "benchmark_status": "active",
+      "role": "official_vllm_page_backend",
+      "validation_status": "gpu7_p1_short_multipage_smoke_verified",
+      "notes": "Official WeVisDoc vLLM single-page route. P bounds the global in-flight page pool across PDFs; outputs are ordered page-wise and are not whole-document joint inference. Reuses gdb_glmocr without installing requirements-local.txt or adding packages."
     },
     {
       "method_id": "mineru_344_2605_popo",

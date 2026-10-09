@@ -23,6 +23,7 @@ PressureKind = Literal[
     "teleocr_request_concurrency",
     "lighton_page_pool",
     "xiaomi_page_pool",
+    "wevisdoc_page_pool",
     "jina_page_pool",
 ]
 
@@ -52,6 +53,12 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
         "One resident vLLM service; P bounds global single-page render/request tasks across PDFs.",
         primary_pressure="inflight_pages",
         secondary_pressure=("vllm_capacity", "outer_workers_fixed_1"),
+    ),
+    "wevisdoc_2b": PressureSpec(
+        "wevisdoc_2b",
+        "wevisdoc_page_pool",
+        "One resident WeVisDoc vLLM service; P bounds global in-flight single-page requests across PDFs.",
+        primary_pressure="inflight_pages",
     ),
     "teleocr_vllm_async": PressureSpec(
         "teleocr_vllm_async", "teleocr_request_concurrency",
@@ -218,6 +225,7 @@ DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
     "pp_structurev3",
     "marker",
     "youtu",
+    "wevisdoc_2b",
 )
 
 
@@ -279,6 +287,9 @@ def pressure_mapping(method: str, pressure: int,
         outer, docs = 1, None
     elif spec.kind == "xiaomi_page_pool":
         overrides["xiaomi_page_concurrency"] = pressure
+        outer, docs = 1, None
+    elif spec.kind == "wevisdoc_page_pool":
+        overrides["wevisdoc_page_concurrency"] = pressure
         outer, docs = 1, None
     elif spec.kind == "pp_page_batch":
         overrides["pp_batch_scale"] = pressure
@@ -357,6 +368,11 @@ def latency_mapping(
         primary = "inflight_pages"
         kind = "latency_page_serial"
         notes = "Official Xiaomi whole-page route; one PDF and one page request at a time."
+    elif method == "wevisdoc_2b":
+        overrides["wevisdoc_page_concurrency"] = 1
+        primary = "inflight_pages"
+        kind = "latency_page_serial"
+        notes = "Official WeVisDoc single-page route; one PDF and one page request at a time."
     elif method.startswith("monkeyocr_"):
         overrides["monkey_region_concurrency"] = 64
         primary = "inflight_regions_default"

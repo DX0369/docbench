@@ -22,6 +22,10 @@ LightOnOCR-2 的官方推理参数、PDF 预处理和 benchmark 规则见
 Xiaomi-OCR-0 的复用关系、依赖来源和迁移检查见
 [gdb_xiaomi_ocr.md](gdb_xiaomi_ocr.md)；环境恢复统一使用下文配方。
 
+WeVisDoc-2B 的 vLLM 服务和页面 worker 也复用此环境，不额外安装或升级依赖。
+官方依赖要求、迁移检查和项目 eager 兼容设置见
+[gdb_wevisdoc.md](gdb_wevisdoc.md)。
+
 ## 恢复已验证环境
 
 以下用于**新的 Linux x86_64 环境和干净源码目录**，不要在现有带补丁 checkout 上重复 sync。

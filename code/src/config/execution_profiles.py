@@ -46,6 +46,10 @@ EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
         "lightonocr2_vllm_page_pool", "lightonocr2_1b", "exclusive_model_service",
         "lighton_page_pool", ("LightOnOCR-2-1B vLLM service",),
     ),
+    ExecutionProfile(
+        "wevisdoc_2b_vllm_page_pool", "wevisdoc_2b", "exclusive_model_service",
+        "wevisdoc_page_pool", ("WeVisDoc-2B vLLM service",),
+    ),
     *(
         ExecutionProfile(f"{method}_vllm_async_multifile", method, "integrated_parser_runtime",
                          "monkey_region_concurrency", ("MonkeyOCR model stack",))
@@ -187,6 +191,7 @@ DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
     "xiaomi_ocr_0": "xiaomi_ocr_0_vllm_page_pool",
     "teleocr_vllm_async": "teleocr_vllm_async",
     "lightonocr2_1b": "lightonocr2_vllm_page_pool",
+    "wevisdoc_2b": "wevisdoc_2b_vllm_page_pool",
     "mineru_344_2605_popo": "mineru_344_2605_popo_vllm_services",
     "deepseek_ocr2": "deepseek_ocr2_page_pool",
     "glmocr": "glmocr_multi_pdf_regions",
@@ -278,6 +283,11 @@ RUNTIME_ARGUMENTS = {
         ("lightonocr2_temperature", float, 0.2),
         ("lightonocr2_top_p", float, 0.9),
     ],
+    "wevisdoc": [
+        ("wevisdoc_env", str, "gdb_glmocr"),
+        ("wevisdoc_model_path", str, None),
+        ("wevisdoc_dpi", int, 200),
+    ],
     "hunyuan_common": [("hunyuan_runner_env", str, "gdb_hunyuan")],
     "hunyuan_ar": [("hunyuan_service_env", str, "gdb_hunyuan"),
         ("hunyuan_vllm_gpu_memory_utilization", float, None),
@@ -348,7 +358,8 @@ def runtime_keys(method):
                   "pp_structurev3": ("pp",), "marker": (), "unlimited_ocr_sglang": (),
                   "teleocr_vllm_async": ("teleocr",),
                   "xiaomi_ocr_0": ("xiaomi",), "jina_ocr_v1": ("jina",),
-                  "lightonocr2_1b": ("lightonocr2",)}[method]
+                  "lightonocr2_1b": ("lightonocr2",),
+                  "wevisdoc_2b": ("wevisdoc",)}[method]
     keys = tuple(key for group in groups for key, _, _ in RUNTIME_ARGUMENTS[group])
     if method == "hunyuanocr_15_dflash":
         keys += DFLASH_KEYS
@@ -399,6 +410,12 @@ def resolve_runtime_defaults(args, method):
         from config.method_versions import get_method_version
         args.lightonocr2_model_path = str(Path(args.lightonocr2_model_path).expanduser().resolve()
             if args.lightonocr2_model_path else get_method_version(method).model_path)
+    elif method == "wevisdoc_2b":
+        from config.method_versions import get_method_version
+        args.wevisdoc_model_path = str(Path(args.wevisdoc_model_path).expanduser().resolve()
+            if args.wevisdoc_model_path else get_method_version(method).model_path)
+        if args.wevisdoc_dpi < 1:
+            raise ValueError("WeVisDoc DPI must be positive")
     elif method == "hunyuanocr_15_dflash":
         from methods.hunyuanocr.dflash import resolve_dflash_args
         resolve_dflash_args(args)
