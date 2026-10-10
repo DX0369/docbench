@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-09 16:42 +08:00
+更新时间：2026-10-10 14:12 +08:00
 
 ## 当前阶段
 
@@ -28,6 +28,9 @@
 - Latency 入口已统一为 `run_single_gpu.py --latency-mode` 和 native 入口的同名选项：四个页面请求路线固定页面级并发 1，其他方法串行提交文档但保留官方/default 内部并发。TeleOCR 已接入常驻 async worker、统一输出和 `P` 映射；所有主要路线的 latency mapping、dry-run 和 Python 语法检查通过。一次性 dry-run 产物已清理，尚未启动真实 latency smoke。
 
 ## 当前实验状态
+
+- 2026-10-10 14:12 +08:00 同步：MonkeyOCRv2 B-Parsing 普通 AR 已接入 `monkeyocrv2_b_parsing` / `monkeyocrv2_b_parsing_vllm_ar`，复用官方常驻 pipeline 和 V2 runner / CUDA graphs，不启用 DFlash。GPU 6 上中文试卷 2 页、英文杂志 2 页、英文试卷 6 页，共 3 文档 10 页，P1/P2 执行与输出结构校验均通过（3/3、零 issue、无失败）。启动耗时 77.32/67.66 秒，ready 后处理 26.78/19.15 秒，处理吞吐 0.373/0.522 页/秒；仅为单次有界 smoke，缓存未统一控制，不据此选择最优 P 或宣称内容准确率。初次 P1 因 adapter 将官方 JSON 文件名与绝对路径比较而导出失败，已修正并通过回归，不改上游源码、模型或依赖。抽查中文正文、表格和图片引用；英文试卷末页仅含页眉页脚，官方过滤后 Markdown 为空但页覆盖完整。服务已退出，GPU 6 恢复约 18 MiB。Latency 已实现逐文档提交、内部页面窗口 64，并通过代码测试和 dry-run，真实 GPU latency smoke 尚未完成。当前成功输出与必要日志位于 `tmp/smoke/monkeyocrv2_ar_gpu6_20261010_114344/`，失败及重复的一次性产物已清理。环境迁移锁尚未导出。
+- 历史诊断：DFlash 曾通过旧 runner + eager + HF override 的六页 smoke；默认 V2 runner warmup 失败已定位至 Triton top-k/top-p kernel 非法写入，但根因修复未完成。DFlash 不属于当前正式接入路线，不将兼容诊断配置推广为 AR 默认。
 
 | 方法族/路线 | 当前状态 |
 | --- | --- |

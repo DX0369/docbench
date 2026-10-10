@@ -91,6 +91,7 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | Unlimited `page_pool` | SGLang 页面请求 | 页面在途数 | 可跨文档供给 |
 | Unlimited `joint` | SGLang 整篇请求 | 文档客户端数 | 文档级联合上下文 |
 | MonkeyOCR 3B/1.2B | 常驻 vLLM async runtime | 分组内区域识别并发上限 | 同组可跨 PDF，分组顺序处理 |
+| MonkeyOCRv2 B-Parsing AR | 官方常驻 ServicePipelinePool + vLLM 服务 | 共享页面在途上限 | 多文档供给同一 pool，按原 PDF 导出 |
 | PaddleOCR-VL 1.5/1.6 | 队列 pipeline + 异步 HTTP 区域 VLM 服务 | 区域识别并发上限 | 多 PDF 页面进入官方 pipeline，可跨文档供给 |
 | GLM-OCR | 布局—识别队列 + HTTP 线程池 | 区域识别并发上限 | 多 PDF 共用页面、区域队列，可跨文档供给 |
 | PP-StructureV3 | pipeline + 页面预取 | 指定原生组件 batch 倍率 | 顶层页面可跨 PDF 组批；部分子组件仍逐页调用 |
@@ -101,6 +102,27 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | TeleOCR vLLM async | 常驻 AsyncLLM 两阶段页面流水线 | 当前 PDF 内布局及区域生成请求的共享在途上限 | 文档内页面异步交错，文档之间顺序处理 |
 | LightOnOCR-2-1B | 官方 vLLM 单页 VLM + 全局 page pool | 页面在途数 | 页面可跨文档供给；不支持已登记的整文档 joint |
 | Xiaomi-OCR-0 | 官方 batch 整页 VLM + 常驻 vLLM 全局 page pool | 页面渲染／请求在途数 | 单 worker、单服务，页面可跨文档供给；不登记 region 或 joint |
+
+### MonkeyOCRv2 B-Parsing AR
+
+method ID 为 `monkeyocrv2_b_parsing`，execution profile 为
+`monkeyocrv2_b_parsing_vllm_ar`；源码、模型和环境绑定以 `code/config/methods.json` 为准。
+只接入普通 AR，官方 `serve.py` 使用 V2 runner 和 CUDA graphs，不传 draft model、
+speculative 配置、eager 或旧 runner 的 HF override；不影响旧 MonkeyOCR 两个方法。
+
+单常驻模型 worker 复用官方 BackendManager、ServicePipelinePool 和预处理器。
+吞吐 P 覆盖 `page_max_inflight`，不是模型 worker 数或区域并发；多文档提交线程只供给任务，
+不复制模型。`server_max_inflight=1024`、`preprocess_batch_size=32` 保留官方默认，
+服务显存比例 0.5、上下文和 batched tokens 16384、max sequences 128 不参与 P 搜索。
+prompt、图像预处理、layout/recognition 和 `result2md` 沿用官方 pipeline，不另行改变生成参数。
+
+Latency 逐 PDF 完成后再处理下一份，内部页面窗口保留官方默认 64；
+`--pressure 1 --latency-mode` 不等于吞吐模式的页面 P=1。
+服务及预处理器初始化在 ready 前完成，处理计时包含 PDF 渲染、预处理、推理、后处理和写盘，
+启动耗时单独保存；不增加文档预热。
+输出为统一 `document.md`、`pages/page_XXXX.md`、`layouts.json`、`image_boxes.json` 和
+`metrics.json`，以及 Markdown 实际引用的图片；页序和页码覆盖按输入 PDF 核对。
+官方默认过滤页眉页脚，因此仅含页眉页脚的页面可能输出空 Markdown，不能据此判为漏页。
 
 ### 区域识别与供给边界
 
@@ -224,7 +246,7 @@ SDK 默认传输重试计入处理时间，不追加文档重跑。
 
 Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan、LightOnOCR-2、Xiaomi-OCR-0 和
 Unlimited `page_pool` 使用页面级 `P=1`；其他方法只
-固定一个外层文档客户端。Monkey 使用官方区域并发 64，TeleOCR 使用 async 默认 100，
+固定一个外层文档客户端。旧 Monkey 使用官方区域并发 64，MonkeyOCRv2 使用官方页面窗口 64，TeleOCR 使用 async 默认 100，
 Youtu 使用 query batch 5；Paddle 不显式传 `vl_rec_max_concurrency`，GLM 不显式传
 `max_workers`（锁定 YAML 的 32），PP 使用基础 `batch_scale=1`，Marker 使用一个
 文档 worker，MinerU 3.x 不覆盖 API 的默认并发和 processing window；4.0.11 的默认

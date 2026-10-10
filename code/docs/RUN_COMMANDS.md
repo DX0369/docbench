@@ -57,6 +57,7 @@ run_fixed() {
 run_fixed deepseek_ocr2 1
 run_fixed pp_structurev3 1
 run_fixed monkeyocr_pro_3b 4
+run_fixed monkeyocrv2_b_parsing 2
 run_fixed teleocr_vllm_async 1
 run_fixed lightonocr2_1b 1
 run_fixed xiaomi_ocr_0 1
@@ -77,6 +78,7 @@ run_fixed jina_ocr_v1 1             # 复用 DFlash 环境；自动指定 CUDA 1
 | `unlimited_ocr_sglang` | SGLang joint 或 page pool | 文档客户端数或页面在途数 |
 | `monkeyocr_pro_3b` | vLLM async multifile | 分组内区域识别并发上限 |
 | `monkeyocr_pro_1_2b` | vLLM async multifile | 分组内区域识别并发上限 |
+| `monkeyocrv2_b_parsing` | 官方常驻 pipeline + vLLM AR V2 runner | 共享页面在途上限 |
 | `paddleocr_vl_15` | 官方多 PDF queue pipeline | 区域识别并发上限（异步 HTTP） |
 | `paddleocr_vl_16` | 官方多 PDF queue pipeline | 区域识别并发上限（异步 HTTP） |
 | `glmocr` | 单 pipeline 区域 worker | 区域识别并发上限（HTTP 线程池） |
@@ -336,6 +338,7 @@ Latency 模式只改变文档之间的调度：runtime/service 只启动一次�
 ```bash
 run_fixed jina_ocr_v1 4
 run_fixed jina_ocr_v1 1 --latency-mode
+run_fixed monkeyocrv2_b_parsing 1 --latency-mode  # 逐文档；内部页面窗口保留官方默认 64
 
 "$PY" src/benchmark/run_pressure_sweep.py \
     --methods jina_ocr_v1 --pressures 1,2,4,8,16,32,64,128,256 \
