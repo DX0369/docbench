@@ -63,6 +63,11 @@ from methods.unlimited_ocr.commands import (
 )
 from methods.youtu.commands import build_worker as build_youtu_worker
 from methods.teleocr.commands import build_worker as build_teleocr_worker
+from methods.monkeyocrv2.commands import (
+    build_service as build_monkeyocrv2_service,
+    build_worker as build_monkeyocrv2_worker,
+    healthcheck_url as monkeyocrv2_healthcheck_url,
+)
 from methods.jina_ocr.commands import build_worker as build_jina_worker
 from methods.lightonocr2.commands import (
     build_service as build_lightonocr2_service,
@@ -130,6 +135,17 @@ def managed_service_identity(method_id: str, command: list[str], port: int) -> d
 
 
 SERVICE_TASKS: dict[str, ServiceTask] = {
+    "monkeyocrv2_b_parsing": ServiceTask(
+        method_id="monkeyocrv2_b_parsing", runner_env="gdb_monkeyocrv2",
+        worker_builder=build_monkeyocrv2_worker, service_builder=build_monkeyocrv2_service,
+        healthcheck_builder=monkeyocrv2_healthcheck_url, docs_per_job=8,
+        env_overrides={"PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1",
+                       "TOKENIZERS_PARALLELISM": "false", "VLLM_USE_V2_MODEL_RUNNER": "1",
+                       "TORCHDYNAMO_DISABLE": "0", "NO_PROXY": "localhost,127.0.0.1,::1",
+                       "no_proxy": "localhost,127.0.0.1,::1",
+                       "HTTP_PROXY": "", "HTTPS_PROXY": "", "ALL_PROXY": "",
+                       "http_proxy": "", "https_proxy": "", "all_proxy": ""},
+    ),
     mineru4.METHOD_ID: ServiceTask(
         method_id=mineru4.METHOD_ID, runner_env=mineru4.CONDA_ENV,
         worker_builder=mineru4.build_worker, service_builder=mineru4.build_service,

@@ -4,6 +4,14 @@
   "note": "Repositories pin runtime checkout revisions once. Variants reference source_repository_id; historical_source_revision and source_binding distinguish historical provenance from compatibility source. Local patch requirements remain recorded in notes.",
   "repositories": [
     {
+      "id": "monkeyocrv2",
+      "path": "third_party/methods/monkeyocrv2",
+      "url": "https://github.com/Yuliang-Liu/MonkeyOCRv2.git",
+      "ref": "6cc0c0bb4864f2541fa6bc3a8f976cffaac8f359",
+      "update_ref": "main",
+      "revision": "6cc0c0bb4864f2541fa6bc3a8f976cffaac8f359"
+    },
+    {
       "id": "mineru4",
       "path": "third_party/methods/mineru4",
       "url": "https://github.com/opendatalab/MinerU.git",
@@ -153,6 +161,23 @@
     }
   ],
   "variants": [
+    {
+      "method_id": "monkeyocrv2_b_parsing",
+      "family_id": "monkeyocrv2",
+      "display_name": "MonkeyOCRv2-B-Parsing",
+      "official_checkpoint": "zenosai/MonkeyOCRv2-B-Parsing",
+      "model_path": "monkeyocrv2/MonkeyOCRv2-B-Parsing",
+      "additional_model_paths": [],
+      "model_required": true,
+      "source_repository_id": "monkeyocrv2",
+      "source_binding": "exact_checkout",
+      "adapter_module": "methods.monkeyocrv2.commands",
+      "conda_environments": ["gdb_monkeyocrv2"],
+      "benchmark_status": "active",
+      "role": "current_candidate",
+      "validation_status": "rtx3090_ar_p1_p2_smoke_verified",
+      "notes": "Official AR service with V2 model runner and resident ServicePipelinePool. P controls page_max_inflight; one pipeline and preprocessor, official generation and HTTP defaults."
+    },
     {
       "method_id": "mineru_4011_standard",
       "family_id": "mineru",

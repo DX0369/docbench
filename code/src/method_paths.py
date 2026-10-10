@@ -15,6 +15,7 @@ METHOD_REPOSITORY_DIRS: dict[str, str] = {
     "mineru": "mineru",
     "mineru_popo": "MinerU-Popo",
     "monkeyocr": "monkeyocr",
+    "monkeyocrv2": "monkeyocrv2",
     "paddleocr": "paddleocr",
     "qianfan_vl": "qianfan_vl",
     "teleocr": "TeleOCR",

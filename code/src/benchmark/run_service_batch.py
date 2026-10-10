@@ -111,6 +111,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wevisdoc-page-concurrency", type=int, default=1)
     parser.add_argument("--monkey-region-concurrency", type=int, default=64,
                         help="vllm_async in-flight region limit; pressure sweeps override this value.")
+    parser.add_argument("--monkeyocrv2-page-max-inflight", type=int, default=64,
+                        help="Official MonkeyOCRv2 shared page window; fixed-P and sweeps use --pressure.")
     parser.add_argument("--hunyuan-runner-env", default="gdb_hunyuan")
     parser.add_argument("--hunyuan-service-env", default="gdb_hunyuan")
     add_dflash_args(parser)
@@ -501,10 +503,12 @@ def run_method_with_persistent_workers(
     gpus: list[int],
     args: argparse.Namespace,
 ) -> list[dict[str, object]]:
+    if method_id == "monkeyocrv2_b_parsing" and len(gpus) != 1:
+        raise ValueError("MonkeyOCRv2 requires one resident pipeline and service on one GPU")
     pdf_paths = collect_pdf_paths(Path(args.input_root))
     page_pool = method_id.startswith("hunyuanocr_") or method_id in {"qianfan_ocr", "qianfan_ocr_think"}
     page_pool = page_pool or method_id == "deepseek_ocr2"
-    page_pool = page_pool or method_id in {"xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b"}
+    page_pool = page_pool or method_id in {"xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b", "monkeyocrv2_b_parsing"}
     page_pool = page_pool or (method_id == "unlimited_ocr_sglang" and args.unlimited_ocr_request_mode == "page_pool")
     jobs = [pdf_paths] if page_pool and pdf_paths else chunk_pdf_paths(pdf_paths, config.docs_per_job)
     if not jobs:

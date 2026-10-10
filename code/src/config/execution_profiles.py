@@ -31,6 +31,10 @@ class ExecutionProfile:
 
 EXECUTION_PROFILES: tuple[ExecutionProfile, ...] = (
     ExecutionProfile(
+        "monkeyocrv2_b_parsing_vllm_ar", "monkeyocrv2_b_parsing", "colocated_service_pipeline",
+        "monkeyocrv2_page_window", ("MonkeyOCRv2-B-Parsing AR vLLM service", "Official preprocessor"),
+    ),
+    ExecutionProfile(
         "jina_ocr_v1_vllm_fastmtp_page_pool", "jina_ocr_v1", "integrated_parser_runtime",
         "jina_page_pool", ("Jina-OCR-v1 resident AsyncLLM with FastMTP K=3",),
     ),
@@ -193,6 +197,7 @@ EXECUTION_PROFILE_BY_ID = {
 }
 
 DEFAULT_PROFILE_BY_METHOD: dict[str, str] = {
+    "monkeyocrv2_b_parsing": "monkeyocrv2_b_parsing_vllm_ar",
     "jina_ocr_v1": "jina_ocr_v1_vllm_fastmtp_page_pool",
     "xiaomi_ocr_0": "xiaomi_ocr_0_vllm_page_pool",
     "teleocr_vllm_async": "teleocr_vllm_async",
@@ -356,7 +361,9 @@ def runtime_keys(method):
         groups = ("qianfan",)
     elif method.startswith("paddleocr"):
         groups = ("paddle",)
-    elif method.startswith("monkeyocr"):
+    elif method == "monkeyocrv2_b_parsing":
+        groups = ()
+    elif method.startswith("monkeyocr_"):
         groups = ("monkey",)
     elif method in ("mineru_303_2509", "mineru_344_2605"):
         groups = ("mineru",)

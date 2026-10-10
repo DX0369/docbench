@@ -6,6 +6,7 @@ from typing import Any
 
 
 PressureKind = Literal[
+    "monkeyocrv2_page_window",
     "hunyuan_page_pool",
     "qianfan_page_pool",
     "unlimited_page_pool",
@@ -44,6 +45,12 @@ class PressureSpec:
 
 
 PRESSURE_SPECS: dict[str, PressureSpec] = {
+    "monkeyocrv2_b_parsing": PressureSpec(
+        "monkeyocrv2_b_parsing", "monkeyocrv2_page_window",
+        "One AR service and official resident pipeline; P controls the shared page window across documents.",
+        primary_pressure="page_max_inflight",
+        secondary_pressure=("server_max_inflight_fixed_1024", "preprocess_batch_size_fixed_32", "vllm_capacity"),
+    ),
     "jina_ocr_v1": PressureSpec(
         "jina_ocr_v1", "jina_page_pool",
         "One resident FastMTP AsyncLLM; P bounds global single-page render/request tasks across PDFs.",
@@ -212,6 +219,7 @@ PRESSURE_SPECS: dict[str, PressureSpec] = {
 
 
 DEFAULT_PRESSURE_METHODS: tuple[str, ...] = (
+    "monkeyocrv2_b_parsing",
     "xiaomi_ocr_0",
     "jina_ocr_v1",
     "teleocr_vllm_async",
@@ -282,6 +290,8 @@ def pressure_mapping(method: str, pressure: int,
         overrides.update(glm_max_workers=pressure, glm_ocr_connection_pool_size=128)
     elif spec.kind == "youtu_query_batch":
         overrides["youtu_ocr_batch_size"] = pressure
+    elif spec.kind == "monkeyocrv2_page_window":
+        overrides["monkeyocrv2_page_max_inflight"] = pressure
     elif spec.kind == "monkey_region_concurrency":
         overrides["monkey_region_concurrency"] = pressure
         mapping["primary_pressure"] = "inflight_regions"
@@ -385,6 +395,10 @@ def latency_mapping(
         primary = "inflight_pages"
         kind = "latency_page_serial"
         notes = "Official WeVisDoc single-page route; one PDF and one page request at a time."
+    elif method == "monkeyocrv2_b_parsing":
+        overrides["monkeyocrv2_page_max_inflight"] = 64
+        primary = "page_max_inflight_default"
+        notes = "One PDF at a time; retain the official pipeline page window of 64."
     elif method.startswith("monkeyocr_"):
         overrides["monkey_region_concurrency"] = 64
         primary = "inflight_regions_default"
