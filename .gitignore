@@ -20,6 +20,17 @@
 /third_party/methods/qianfan_vl/docs/images/video_undertanding.mp4
 /third_party/methods/unlimited_ocr/assets/long-horizon-ocr.gif
 
+# MonkeyOCRv2 upstream demo data and prebuilt binaries; retain local files
+/third_party/methods/monkeyocrv2/asserts/Visualization.gif
+/third_party/methods/monkeyocrv2/docs/assets/Visualization.gif
+/third_party/methods/monkeyocrv2/docs/parsing/*_results/
+/third_party/methods/monkeyocrv2/images_test/
+/third_party/methods/monkeyocrv2/forensics/data/
+/third_party/methods/monkeyocrv2/forensics/libs/jpegio/tests/
+/third_party/methods/monkeyocrv2/**/*.dylib
+/third_party/methods/monkeyocrv2/**/*.a
+/third_party/methods/monkeyocrv2/**/*.lib
+
 # Python-generated files
 __pycache__/
 *.py[cod]

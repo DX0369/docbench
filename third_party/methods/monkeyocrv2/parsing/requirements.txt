@@ -1,0 +1,2 @@
+gradio==5.30.0
+pypdfium2==5.10.1
