@@ -50,7 +50,11 @@ from paths import TMP_ROOT  # noqa: E402
 
 METHOD_ID = "unlimited_ocr_sglang"
 METHOD_NAME = "Unlimited-OCR SGLang"
-PROMPT = "Multi page parsing."
+# Official README recipes: multi-page/PDF input uses base; a single image uses gundam (the README example).
+RECIPES = {
+    "joint": {"prompt": "Multi page parsing.", "image_mode": "base", "ngram_window": 1024},
+    "page_pool": {"prompt": "document parsing.", "image_mode": "gundam", "ngram_window": 128},
+}
 MAX_TOKENS = 16384
 REFERENCE_RE = re.compile(
     r"(<\|ref\|>(.*?)<\|/ref\|><\|det\|>(.*?)<\|/det\|>)", re.DOTALL,
@@ -73,7 +77,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dpi", type=int, default=200)
     parser.add_argument("--request-timeout-seconds", type=float, default=1200.0)
     parser.add_argument("--no-repeat-ngram-size", type=int, default=35)
-    parser.add_argument("--ngram-window", type=int, default=1024)
     parser.add_argument("--request-mode", choices=("joint", "page_pool"), default="joint")
     parser.add_argument("--page-concurrency", type=int, default=1)
     parser.add_argument("--skip-existing", action="store_true")
@@ -187,9 +190,9 @@ def build_payload(
     image_paths: Sequence[Path],
     logit_processor: str,
     no_repeat_ngram_size: int,
-    ngram_window: int,
+    recipe: dict[str, Any],
 ) -> dict[str, Any]:
-    content = [{"type": "text", "text": PROMPT}]
+    content = [{"type": "text", "text": recipe["prompt"]}]
     content.extend(encode_image(image_path) for image_path in image_paths)
     return {
         "model": model_name,
@@ -197,11 +200,11 @@ def build_payload(
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
         "skip_special_tokens": False,
-        "images_config": {"image_mode": "base"},
+        "images_config": {"image_mode": recipe["image_mode"]},
         "custom_logit_processor": logit_processor,
         "custom_params": {
             "ngram_size": no_repeat_ngram_size,
-            "window_size": ngram_window,
+            "window_size": recipe["ngram_window"],
         },
         "stream": True,
         "stream_options": {"include_usage": True},
@@ -293,7 +296,7 @@ def run_one_pdf(
             image_paths=page_paths,
             logit_processor=logit_processor,
             no_repeat_ngram_size=args.no_repeat_ngram_size,
-            ngram_window=args.ngram_window,
+            recipe=RECIPES["joint"],
         )
         with error_context("inference"):
             raw_output, generation = generate(
@@ -347,14 +350,14 @@ def run_one_pdf(
         "output_dir": str(doc_output_dir),
         "server_url": args.server_url,
         "model_name": args.model_name,
-        "prompt": PROMPT,
-        "image_mode": "base",
+        "prompt": RECIPES["joint"]["prompt"],
+        "image_mode": RECIPES["joint"]["image_mode"],
         "dpi": args.dpi,
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
         "skip_special_tokens": False,
         "no_repeat_ngram_size": args.no_repeat_ngram_size,
-        "ngram_window": args.ngram_window,
+        "ngram_window": RECIPES["joint"]["ngram_window"],
         **generation,
         "output_tokens": completion_tokens if completion_tokens is not None else "N/A",
         "response_characters": len(raw_output),
@@ -460,8 +463,10 @@ def should_skip(args, pdf):
     if not args.skip_existing or not document_completed(output):
         return False
     metrics = json.loads((output / "metrics.json").read_text())
-    if metrics["execution_profile"] != execution_profile(args):
-        raise ValueError(f"Cannot reuse another Unlimited request route: {output}")
+    recipe = RECIPES[args.request_mode]
+    if (metrics["execution_profile"] != execution_profile(args)
+            or any(metrics[key] != recipe[key] for key in ("prompt", "image_mode", "ngram_window"))):
+        raise ValueError(f"Cannot reuse another Unlimited request route or recipe: {output}")
     return True
 
 
@@ -483,7 +488,7 @@ def process_page_pool(args, pdf_paths, *, logit_processor):
             size = get_image_size(image)
             payload = build_payload(model_name=args.model_name, image_paths=[image],
                 logit_processor=logit_processor, no_repeat_ngram_size=args.no_repeat_ngram_size,
-                ngram_window=args.ngram_window)
+                recipe=RECIPES["page_pool"])
             with error_context("inference", page):
                 raw, generation = generate(session=local.session, server_url=args.server_url,
                     payload=payload, timeout_seconds=args.request_timeout_seconds)
@@ -512,9 +517,9 @@ def process_page_pool(args, pdf_paths, *, logit_processor):
             "method": METHOD_NAME, "method_id": METHOD_ID, "backend": "sglang",
             "execution_profile": execution_profile(args), "request_mode": "page_pool",
             "input_mode": "independent_pages", "pdf_path": str(pdf), "output_dir": str(output),
-            "server_url": args.server_url, "model_name": args.model_name, "prompt": PROMPT,
-            "image_mode": "base", "dpi": args.dpi, "temperature": 0, "skip_special_tokens": False,
-            "no_repeat_ngram_size": args.no_repeat_ngram_size, "ngram_window": args.ngram_window,
+            "server_url": args.server_url, "model_name": args.model_name, "prompt": RECIPES["page_pool"]["prompt"],
+            "image_mode": RECIPES["page_pool"]["image_mode"], "dpi": args.dpi, "temperature": 0, "skip_special_tokens": False,
+            "no_repeat_ngram_size": args.no_repeat_ngram_size, "ngram_window": RECIPES["page_pool"]["ngram_window"],
             "page_concurrency": args.page_concurrency, "request_completed": True,
             "page_count": len(ordered), "input_page_count": len(ordered),
             "quality_warnings": warnings, "output_scope": "document_and_pages",

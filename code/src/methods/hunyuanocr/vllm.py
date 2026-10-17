@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 import time
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict
 
 THIS_DIR = Path(__file__).resolve().parent
@@ -46,9 +48,50 @@ DEFAULT_PROMPT = (
 )
 
 
+_V10_UTILS = None
+
+
+def v10_clean_repeated_substrings(text: str) -> str:
+    """Official 1.0 README post-processing; loaded by path because the module is named ``utils``."""
+    global _V10_UTILS
+    if _V10_UTILS is None:
+        path = method_repo_path("hunyuanocr") / "HunyuanOCR_v1.0" / "infer" / "utils.py"
+        spec = importlib.util.spec_from_file_location("hunyuanocr_v10_infer_utils", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _V10_UTILS = module
+    return _V10_UTILS.clean_repeated_substrings(text)
+
+
+class FinishReasonClient:
+    """Pass the official streaming call through unchanged while recording its final finish_reason."""
+
+    def __init__(self, client):
+        self.finish_reason = None
+        self._client = client
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kwargs):
+        stream = self._client.chat.completions.create(**kwargs)
+        owner = self
+
+        class Stream:
+            def __iter__(self):
+                for event in stream:
+                    if event.choices and event.choices[0].finish_reason:
+                        owner.finish_reason = event.choices[0].finish_reason
+                    yield event
+
+            def close(self):
+                stream.close()
+
+        return Stream()
+
+
 def postprocess_output(text: str, profile: str) -> tuple[str, Dict[str, Any]]:
     if profile != "hunyuanocr_15":
-        return text, {}
+        cleaned = v10_clean_repeated_substrings(text)
+        return cleaned, {"clean_repeated_substrings_removed_chars": len(text) - len(cleaned)}
     repo_root = method_repo_path("hunyuanocr")
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
@@ -119,17 +162,19 @@ def infer_page(args, client, image_path, page_number):
             if str(repo_root) not in sys.path:
                 sys.path.insert(0, str(repo_root))
             from inference.utils.hunyuan_utils import infer_stream
-            text, early_stopped = infer_stream(client, {
+            recorder = FinishReasonClient(client)
+            text, early_stopped = infer_stream(recorder, {
                 "model": args.model_name,
                 "messages": build_image_chat_messages(image_path, prompt, system_prompt=""),
                 **generation_kwargs,
             })
+            finish_reason = recorder.finish_reason
         else:
-            text = chat_with_image(client, args.model_name, image_path, prompt,
-                                   system_prompt="", **generation_kwargs)
+            text, finish_reason = chat_with_image(client, args.model_name, image_path, prompt,
+                                                  system_prompt="", **generation_kwargs)
     with error_context("postprocess", page_number):
         text, stats = postprocess_output(text, args.prompt_profile)
-    return text, round(time.perf_counter() - page_start, 6), stats, early_stopped
+    return text, round(time.perf_counter() - page_start, 6), stats, early_stopped, finish_reason
 
 
 def run_page(args, client, pdf, page):
@@ -154,11 +199,15 @@ def export_document(args, pdf, results, started):
         "prompt_profile": args.prompt_profile, "max_tokens": args.max_tokens,
         "top_p": args.top_p, "top_k": args.top_k, "repetition_penalty": args.repetition_penalty,
         "dpi": args.dpi, "page_concurrency": args.page_concurrency, "page_count": len(pages),
-        "page_render_seconds_sum": round(sum(r[4] for r in results), 6),
+        "page_render_seconds_sum": round(sum(r[5] for r in results), 6),
         "page_inference_seconds_sum": round(sum(latencies), 6),
         "doc_total_seconds": round(time.perf_counter() - started, 6),
         "document_markdown_path": "document.md", "pages": build_page_records(pages, latencies),
         "page_postprocess_stats": [r[2] for r in results],
+        # Early-stopped streams are closed by the official client, so their finish_reason is None.
+        "page_finish_reasons": [r[4] for r in results],
+        "warnings": [{"page_number": i, "reason": "generation_length_limit"}
+                     for i, r in enumerate(results, 1) if r[4] == "length"],
         "notes": ["Independent page images; document markdown is merged in original page order.",
                   "Page render/inference sums overlap under concurrency and are not document wall time."],
     }

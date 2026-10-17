@@ -56,7 +56,7 @@ HUNYUAN_15 = HunyuanVersion(
     display_name=HUNYUAN_15_MANIFEST.display_name,
     model_dir=HUNYUAN_15_MANIFEST.model_path,
     served_model_name="hunyuanocr-1.5",
-    max_model_len=131072,
+    max_model_len=65536,  # RTX 3090 project value used by every entry; official serve.sh uses 131072.
     max_tokens=32768,
     prompt_profile="hunyuanocr_15",
     top_p=1.0,
@@ -135,14 +135,14 @@ def _build_service(
         "--host",
         "127.0.0.1",
         "--trust-remote-code",
-        "--no-enable-prefix-caching",
         "--max-model-len",
         str(args.hunyuan_vllm_max_model_len or version.max_model_len),
-        "--mm-processor-cache-gb",
-        "0",
         "--gpu-memory-utilization",
         str(resolve_ar_gpu_memory_utilization(version.method_id, args.hunyuan_vllm_gpu_memory_utilization)),
     ]
+    if version.method_id == "hunyuanocr_10":
+        # Only the 1.0 README serve example disables prefix caching and the MM processor cache.
+        cmd.extend(["--no-enable-prefix-caching", "--mm-processor-cache-gb", "0"])
     if version.method_id == "hunyuanocr_15":
         cmd.extend(
             [

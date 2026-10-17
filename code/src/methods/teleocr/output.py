@@ -25,6 +25,7 @@ def write_document_outputs(
     middle_json: dict[str, Any],
     input_page_count: int,
     processing_seconds: float,
+    quality_counts: dict[str, int],
 ) -> None:
     pdf_info = middle_json.get("pdf_info")
     if not isinstance(pdf_info, list) or len(pdf_info) != input_page_count:
@@ -62,7 +63,7 @@ def write_document_outputs(
         "doc_total_seconds": round(processing_seconds, 6),
         "document_markdown_path": "document.md",
         "pages": build_page_records(page_markdowns, ["N/A"] * len(page_markdowns)),
-        "warnings": [],
+        "warnings": [{"reason": key, "count": count} for key, count in sorted(quality_counts.items())],
         "asset_policy": "no_image_assets",
         "notes": [
             "One resident official TeleOCR vllm-async-engine runtime is reused across documents.",

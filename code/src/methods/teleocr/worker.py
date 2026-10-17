@@ -63,6 +63,7 @@ def process_pdf_paths(args: argparse.Namespace, pdf_paths: list[Path], *, runtim
                     middle_json,
                     expected_pages,
                     time.perf_counter() - started,
+                    dict(runtime.quality_counts),
                 )
                 print(f"[done] {pdf_path}", flush=True)
         except Exception as exc:  # noqa: BLE001

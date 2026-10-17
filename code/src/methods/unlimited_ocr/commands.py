@@ -73,8 +73,6 @@ def build_worker(args: argparse.Namespace, gpu_id: int, queue_dir: Path, worker_
         str(args.unlimited_ocr_request_timeout_seconds),
         "--no-repeat-ngram-size",
         "35",
-        "--ngram-window",
-        "1024",
         "--request-mode", args.unlimited_ocr_request_mode,
         *(["--page-concurrency", str(args.unlimited_ocr_page_concurrency)]
           if args.unlimited_ocr_request_mode == "page_pool" else []),

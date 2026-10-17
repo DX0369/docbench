@@ -52,7 +52,12 @@ def request(args, client, image):
         raise ValueError(f"Unconfirmed response: finish_reason={choice.finish_reason!r}")
     if not isinstance(raw, str):
         raise ValueError("Qianfan response content must be a string")
-    text = re.sub(r"^\s*<think>.*?</think>\s*", "", raw, count=1, flags=re.DOTALL).strip()
+    # Same rule as the official chat_template for assistant turns: keep the text after the last </think>.
+    if "</think>" in raw:
+        text = raw.split("</think>")[-1].lstrip("\n").strip()
+    else:
+        text = raw.strip()
+        record["think_unterminated"] = bool(args.enable_think)
     return text, record
 
 
@@ -112,7 +117,7 @@ def export(args, pdf, count, document, pages, records, boxes, started, *, warnin
         "page_boundary_source": "input_pdf",
         "pages": build_page_records(pages or [], [r["request_seconds"] for r in records]),
         "requests": records, "doc_total_seconds": time.perf_counter() - started,
-        "quality_warnings": list(warnings), "invalid_image_box_count": len(warnings),
+        "quality_warnings": list(warnings), "invalid_image_box_count": sum(w["warning"] == "invalid_image_box" for w in warnings),
         "document_markdown_path": "document.md",
         "notes": [],
     }
@@ -122,7 +127,7 @@ def export(args, pdf, count, document, pages, records, boxes, started, *, warnin
     ))
     write_json(output / "metrics.json", metrics)
     if warnings:
-        print(f"[warning] {pdf}: {len(warnings)} invalid image box(es); see metrics.json", flush=True)
+        print(f"[warning] {pdf}: {len(warnings)} quality warning(s); see metrics.json", flush=True)
     (output / "error.json").unlink(missing_ok=True)
 
 
@@ -159,4 +164,8 @@ def run_page(args, client, pdf, page):
         with error_context("export", page):
             boxes, warnings = extract_image_boxes(text, image, page)
         record["page_index"] = page
+        if record["finish_reason"] == "length":
+            warnings.append({"warning": "generation_length_limit", "page_index": page})
+        if record.pop("think_unterminated", False):
+            warnings.append({"warning": "think_unterminated", "page_index": page})
         return text, record, boxes, warnings

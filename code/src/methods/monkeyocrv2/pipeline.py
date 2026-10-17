@@ -126,9 +126,10 @@ def process_pdf_paths(args, pdf_paths, pool, backend, official):
             raise FileExistsError(f"Use a new run directory for existing output: {output}")
         pending_paths.append(pdf)
     failed = False
-    # A fixed bounded document feed fills the shared official page window.
-    # These threads own no model; P changes only the pool's page limit.
-    with ThreadPoolExecutor(max_workers=min(8, len(pending_paths)) or 1) as feed:
+    # Like the official CLI, submit every document; the official pool renders
+    # lazily and its page window (P) is the only bound on in-flight pages.
+    # These threads own no model and only wait for their document result.
+    with ThreadPoolExecutor(max_workers=len(pending_paths) or 1) as feed:
         pending = {feed.submit(process_document, args, pdf, pool, backend, official): pdf for pdf in pending_paths}
         for future in as_completed(pending):
             try:

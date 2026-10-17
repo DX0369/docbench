@@ -62,7 +62,8 @@ class JinaRuntime:
             if final is None or len(final.outputs) != 1:
                 raise RuntimeError("Jina engine did not return one page completion")
             completion = final.outputs[0]
-            if completion.finish_reason not in {"stop", "length"}:
+            # Official repetition_detection ends with "repetition"; that is a quality warning, not a failure.
+            if completion.finish_reason not in {"stop", "length", "repetition"}:
                 raise RuntimeError(f"Jina generation failed: {completion.finish_reason}")
             return completion.text, completion.finish_reason
         except Exception as exc:

@@ -146,17 +146,21 @@ def _iter_det_boxes(node: Any) -> Iterable[List[float]]:
             yield from _iter_det_boxes(item)
 
 
-def parse_ref_det_entries(raw_page_text: str) -> List[Dict[str, Any]]:
+def parse_ref_det_entries(raw_page_text: str) -> tuple[List[Dict[str, Any]], int]:
+    """Return parsed spans and the number of spans whose det payload has no usable box."""
     entries: List[Dict[str, Any]] = []
+    invalid = 0
     for match in REF_DET_PATTERN.finditer(raw_page_text):
         label = str(match.group(1) or "").strip()
         det_raw = str(match.group(2) or "").strip()
         try:
             det_obj = ast.literal_eval(det_raw)
         except (SyntaxError, ValueError):
+            invalid += 1
             continue
         boxes = list(_iter_det_boxes(det_obj))
         if not boxes:
+            invalid += 1
             continue
         entries.append(
             {
@@ -165,11 +169,16 @@ def parse_ref_det_entries(raw_page_text: str) -> List[Dict[str, Any]]:
                 "raw": match.group(0),
             }
         )
-    return entries
+    return entries, invalid
 
 
-def clean_page_markdown(raw_page_text: str) -> str:
+def clean_page_markdown(raw_page_text: str, kept_page_index: int) -> str:
     content = normalize_model_output(raw_page_text)
+    # Official run_dpsk_ocr2_pdf.py: image refs become images/{jdx}_{idx}.jpg links (jdx counts kept
+    # pages); other refs are removed. Crops are not saved here, so these links are intentionally dangling.
+    image_matches = [m.group(0) for m in REF_DET_PATTERN.finditer(content) if "<|ref|>image<|/ref|>" in m.group(0)]
+    for idx, match in enumerate(image_matches):
+        content = content.replace(match, f"![](images/{kept_page_index}_{idx}.jpg)\n")
     content = REF_DET_PATTERN.sub("", content)
     content = content.replace("\\coloneqq", ":=").replace("\\eqqcolon", "=:").replace("\r\n", "\n")
     content = re.sub(r"\n{3,}", "\n\n", content).strip()
@@ -207,14 +216,18 @@ def extract_image_boxes(
     pdf_path: Path,
     raw_page_outputs: Sequence[str],
     page_sizes: Sequence[Sequence[int]],
-) -> Dict[str, Any]:
+) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
     entries: List[Dict[str, Any]] = []
+    warnings: List[Dict[str, Any]] = []
     for page_index, (raw_page_text, page_size) in enumerate(
         zip(raw_page_outputs, page_sizes),
         start=1,
     ):
         page_width, page_height = int(page_size[0]), int(page_size[1])
-        for ref_entry in parse_ref_det_entries(raw_page_text):
+        ref_entries, invalid = parse_ref_det_entries(raw_page_text)
+        if invalid:
+            warnings.append({"page_number": page_index, "reason": "invalid_ref_det", "count": invalid})
+        for ref_entry in ref_entries:
             label = str(ref_entry["label"])
             if not is_image_like_label(label):
                 continue
@@ -250,7 +263,7 @@ def extract_image_boxes(
             "<|det|> coordinates are interpreted in the model's 0-999 page-relative scale and converted to both absolute pixels and 0-1000 normalized coordinates.",
             "If the model output does not contain parseable <|ref|>/<|det|> entries, image_boxes.json may be empty.",
         ],
-    )
+    ), warnings
 
 
 def request_single_page(
@@ -315,13 +328,22 @@ def write_pdf_outputs(
     raw_page_outputs: List[str] = []
     page_sizes: List[List[int]] = []
 
+    warnings: List[Dict[str, Any]] = []
+    kept_pages = 0
     for page_result in sorted(page_results, key=lambda item: item["page_index"]):
         raw_output = page_result["raw_output"]
+        if page_result["finish_reason"] != "stop":
+            # Official SKIP_REPEAT=True drops pages without EOS; keep the page slot empty and auditable.
+            warnings.append({"page_number": page_result["page_index"], "reason": "skip_repeat_no_eos",
+                             "finish_reason": page_result["finish_reason"]})
+            raw_output = ""
         page_seconds = page_result["page_seconds"]
         page_size = page_result["page_size"]
         page_sizes.append([int(page_size[0]), int(page_size[1])])
         raw_page_outputs.append(raw_output)
-        page_markdowns.append(clean_page_markdown(raw_output))
+        page_markdowns.append(clean_page_markdown(raw_output, kept_pages))
+        if page_result["finish_reason"] == "stop":
+            kept_pages += 1
         page_latencies.append(page_seconds)
 
     document_markdown = concat_document_markdown(page_markdowns)
@@ -357,18 +379,19 @@ def write_pdf_outputs(
         "document_markdown_path": "document.md",
         "pages": build_page_records(page_markdowns, page_latencies),
         "notes": ["One bounded page pool across PDFs; original page order is restored.",
-                  "Page render/request sums overlap and are not document or trial wall time."],
+                  "Page render/request sums overlap and are not document or trial wall time.",
+                  "Image refs follow the official images/{jdx}_{idx}.jpg links; crops are not saved."],
     }
     metrics["page_render_seconds_sum"] = sum(page["render_seconds"] for page in page_results)
     metrics["page_finish_reasons"] = [page["finish_reason"] for page in sorted(page_results, key=lambda item: item["page_index"])]
-    write_json(
-        doc_output_dir / "image_boxes.json",
-        extract_image_boxes(
-            pdf_path=pdf_path,
-            raw_page_outputs=raw_page_outputs,
-            page_sizes=page_sizes,
-        ),
+    image_boxes, box_warnings = extract_image_boxes(
+        pdf_path=pdf_path,
+        raw_page_outputs=raw_page_outputs,
+        page_sizes=page_sizes,
     )
+    write_json(doc_output_dir / "image_boxes.json", image_boxes)
+    metrics["skip_repeat"] = True
+    metrics["warnings"] = warnings + box_warnings
     metrics["doc_total_seconds"] = round(time.perf_counter() - doc_started_at, 6)
     write_json(doc_output_dir / "metrics.json", metrics)
     remove_file_if_exists(doc_output_dir / "error.json")

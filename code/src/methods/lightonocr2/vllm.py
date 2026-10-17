@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def request_page(args: argparse.Namespace, client: Any, image_path: Path) -> str:
+def request_page(args: argparse.Namespace, client: Any, image_path: Path) -> tuple[str, str | None]:
     # The official LightOnOCR-2 vLLM example sends an image-only user message;
     # do not inject the generic OCR prompt used by other VLM adapters.
     response = client.chat.completions.create(
@@ -86,7 +86,8 @@ def request_page(args: argparse.Namespace, client: Any, image_path: Path) -> str
         top_p=args.top_p,
         stream=False,
     )
-    return content_to_text(response.choices[0].message.content).strip()
+    choice = response.choices[0]
+    return content_to_text(choice.message.content).strip(), choice.finish_reason
 
 
 def run_page(args: argparse.Namespace, client: Any, pdf: Path, page: int):
@@ -110,8 +111,8 @@ def run_page(args: argparse.Namespace, client: Any, pdf: Path, page: int):
         finally:
             image.close()
         rendered = round(time.perf_counter() - started, 6)
-        text = request_page(args, client, image_path)
-    return text, round(time.perf_counter() - started, 6), rendered
+        text, finish_reason = request_page(args, client, image_path)
+    return text, round(time.perf_counter() - started, 6), rendered, finish_reason
 
 
 def export_document(args: argparse.Namespace, pdf: Path, results, started: float) -> None:
@@ -141,7 +142,9 @@ def export_document(args: argparse.Namespace, pdf: Path, results, started: float
         "doc_total_seconds": round(time.perf_counter() - started, 6),
         "document_markdown_path": "document.md",
         "pages": build_page_records(pages, latencies),
-        "warnings": [],
+        "page_finish_reasons": [item[3] for item in results],
+        "warnings": [{"page_number": i, "reason": "generation_length_limit"}
+                     for i, item in enumerate(results, 1) if item[3] == "length"],
         "asset_policy": "no_image_assets",
         "notes": [
             "One resident official vLLM service; each request contains exactly one page image.",

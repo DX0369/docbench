@@ -21,6 +21,7 @@ from paths import TMP_ROOT
 
 METHOD = "jina_ocr_v1"
 PROFILE = "jina_ocr_v1_vllm_fastmtp_page_pool"
+WARNING_BY_FINISH_REASON = {"length": "generation_length_limit", "repetition": "repetition_detected"}
 
 
 def parse_args():
@@ -87,8 +88,9 @@ def process_pdf_paths(args, runtime, pdfs):
             "doc_total_seconds": round(time.perf_counter() - started, 6),
             "document_markdown_path": "document.md",
             "pages": build_page_records(pages, [item[1] for item in results]),
-            "warnings": [{"page_number": i, "reason": "generation_length_limit"}
-                         for i, item in enumerate(results, 1) if item[2] == "length"],
+            "page_finish_reasons": [item[2] for item in results],
+            "warnings": [{"page_number": i, "reason": WARNING_BY_FINISH_REASON[item[2]]}
+                         for i, item in enumerate(results, 1) if item[2] in WARNING_BY_FINISH_REASON],
             "asset_policy": "no_image_assets",
         })
         write_json(directory / "image_boxes.json", build_image_boxes_payload(

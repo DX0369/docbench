@@ -91,28 +91,6 @@ def build_image_chat_messages(
     return messages
 
 
-def build_images_chat_messages(
-    image_paths: List[Path],
-    prompt: str,
-    system_prompt: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    messages: List[Dict[str, Any]] = []
-    if system_prompt is not None:
-        messages.append({"role": "system", "content": system_prompt})
-
-    content: List[Dict[str, Any]] = []
-    for image_path in image_paths:
-        content.append(
-            {
-                "type": "image_url",
-                "image_url": {"url": image_to_data_url(image_path)},
-            }
-        )
-    content.append({"type": "text", "text": prompt})
-    messages.append({"role": "user", "content": content})
-    return messages
-
-
 def content_to_text(content: Any) -> str:
     if content is None:
         return ""
@@ -144,7 +122,7 @@ def chat_with_image(
     max_tokens: Optional[int] = None,
     seed: Optional[int] = None,
     extra_body: Optional[Dict[str, Any]] = None,
-) -> str:
+) -> tuple[str, Optional[str]]:
     create_kwargs: Dict[str, Any] = {
         "model": model_name,
         "messages": build_image_chat_messages(
@@ -165,40 +143,5 @@ def chat_with_image(
         create_kwargs["extra_body"] = extra_body
 
     response = client.chat.completions.create(**create_kwargs)
-    return content_to_text(response.choices[0].message.content).strip()
-
-
-def chat_with_images(
-    client: OpenAI,
-    model_name: str,
-    image_paths: List[Path],
-    prompt: str,
-    *,
-    system_prompt: Optional[str] = None,
-    temperature: float = 0.0,
-    top_p: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    seed: Optional[int] = None,
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> str:
-    create_kwargs: Dict[str, Any] = {
-        "model": model_name,
-        "messages": build_images_chat_messages(
-            image_paths=image_paths,
-            prompt=prompt,
-            system_prompt=system_prompt,
-        ),
-        "temperature": temperature,
-        "stream": False,
-    }
-    if top_p is not None:
-        create_kwargs["top_p"] = top_p
-    if max_tokens is not None:
-        create_kwargs["max_tokens"] = max_tokens
-    if seed is not None:
-        create_kwargs["seed"] = seed
-    if extra_body:
-        create_kwargs["extra_body"] = extra_body
-
-    response = client.chat.completions.create(**create_kwargs)
-    return content_to_text(response.choices[0].message.content).strip()
+    choice = response.choices[0]
+    return content_to_text(choice.message.content).strip(), choice.finish_reason

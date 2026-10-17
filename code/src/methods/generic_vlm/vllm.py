@@ -5,7 +5,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 THIS_DIR = Path(__file__).resolve().parent
 CODES_ROOT = THIS_DIR.parents[1]
@@ -123,6 +123,7 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
     render_seconds: float | None = None
     page_markdowns: List[str] = []
     page_latencies: List[float] = []
+    page_finish_reasons: List[Optional[str]] = []
     page_sizes: List[Any] = []
     render_dir: Path | None = None
     created_temp_dir = False
@@ -145,7 +146,7 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
         extra_body = build_extra_body(args)
         for image_path in page_images:
             page_start = time.perf_counter()
-            page_markdown = chat_with_image(
+            page_markdown, finish_reason = chat_with_image(
                 client=client,
                 model_name=args.model_name,
                 image_path=image_path,
@@ -157,6 +158,7 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
                 extra_body=extra_body,
             )
             page_seconds = round(time.perf_counter() - page_start, 6)
+            page_finish_reasons.append(finish_reason)
             page_markdowns.append(page_markdown.rstrip() + "\n" if page_markdown.strip() else "")
             page_latencies.append(page_seconds)
 
@@ -186,6 +188,9 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
             "doc_total_seconds": doc_total_seconds,
             "document_markdown_path": "document.md",
             "pages": build_page_records(page_markdowns, page_latencies),
+            "page_finish_reasons": page_finish_reasons,
+            "warnings": [{"page_number": i, "reason": "generation_length_limit"}
+                         for i, reason in enumerate(page_finish_reasons, 1) if reason == "length"],
             "notes": notes,
         }
         write_json(doc_output_dir / "metrics.json", metrics)

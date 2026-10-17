@@ -88,7 +88,9 @@ def request_page(args: argparse.Namespace, client: Any, image_path: Path) -> tup
     if not response.choices:
         raise RuntimeError("WeVisDoc service returned no choices")
     choice = response.choices[0]
-    finish_reason = str(getattr(choice, "finish_reason", None) or "unknown")
+    finish_reason = choice.finish_reason
+    if not finish_reason:
+        raise RuntimeError("WeVisDoc service returned a choice without finish_reason")
     # Empty content and length termination are recorded as output warnings;
     # transport, response-shape and service failures still propagate.
     text = content_to_text(getattr(choice.message, "content", None)).strip()

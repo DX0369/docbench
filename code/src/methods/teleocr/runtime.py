@@ -2,11 +2,14 @@
 
 The upstream TeleOCR functions are used unchanged.  This module only owns the
 runtime lifetime and supplies the predictor to ``aio_doc_analyze`` so that a
-single AsyncLLM and event loop are reused for every queued document.
+single AsyncLLM and event loop are reused for every queued document.  Upstream
+skips malformed layout lines, failed crops, failed post-processing and truncated
+regions with only a print; thin pass-through wrappers count those events.
 """
 from __future__ import annotations
 
 import asyncio
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +20,54 @@ class TeleOCRRuntime:
         asyncio.set_event_loop(self.loop)
         self.args = args
         self.predictor = self._load_predictor()
+        self.quality_counts: dict[str, int] = {}
+        self._counts_lock = threading.Lock()
+        self._install_quality_counters()
+
+    def _bump(self, key: str, count: int = 1) -> None:
+        if count:
+            with self._counts_lock:
+                self.quality_counts[key] = self.quality_counts.get(key, 0) + count
+
+    def _install_quality_counters(self) -> None:
+        import TeleOCR.vlm_utils.TeleOCR_client as client_module
+
+        helper = self.predictor.helper
+        parse_layout_output = helper.parse_layout_output
+        prepare_for_extract = helper.prepare_for_extract
+        post_process = client_module.post_process
+        get_output_content = self.predictor.client.get_output_content
+
+        def counted_parse_layout_output(output):
+            blocks = parse_layout_output(output)
+            self._bump("layout_lines_skipped",
+                       sum(1 for line in output.split("\n") if line.strip()) - len(blocks))
+            return blocks
+
+        def counted_prepare_for_extract(image, blocks, not_extract_list=None):
+            result = prepare_for_extract(image, blocks, not_extract_list)
+            # Mirrors upstream's intentional skip_list; anything else missing from indices was dropped.
+            skip = {"image", "list", "equation_block"} | {
+                t for t in (not_extract_list or []) if t in client_module.BLOCK_TYPES}
+            self._bump("regions_skipped", sum(block.type not in skip for block in blocks) - len(result[3]))
+            return result
+
+        def counted_post_process(*args, **kwargs):
+            try:
+                return post_process(*args, **kwargs)
+            except Exception:
+                self._bump("post_process_failed")
+                raise
+
+        def counted_get_output_content(output):
+            if output.finished and output.outputs and output.outputs[0].finish_reason == "length":
+                self._bump("regions_truncated")
+            return get_output_content(output)
+
+        helper.parse_layout_output = counted_parse_layout_output
+        helper.prepare_for_extract = counted_prepare_for_extract
+        client_module.post_process = counted_post_process
+        self.predictor.client.get_output_content = counted_get_output_content
 
     def _resident_tasks(self) -> set[asyncio.Task[Any]]:
         """Return vLLM tasks that must survive a document-level exception."""
@@ -87,6 +138,8 @@ class TeleOCRRuntime:
         # bypassing its image/layout-PDF writer.
         pdf_bytes = convert_pdf_bytes_to_bytes(read_fn(pdf_path), None)
         baseline = asyncio.all_tasks(self.loop)
+        with self._counts_lock:
+            self.quality_counts = {}
         try:
             middle_json = self.loop.run_until_complete(
                 aio_doc_analyze(
