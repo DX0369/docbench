@@ -115,7 +115,10 @@ class MonkeyChat_vLLM_async:
         for i, r in enumerate(results):
             if isinstance(r, BaseException):
                 logger.error(f"Task {i} exception: {r}")
-                raise r
+                # GlobalDocBench may collect region exceptions to isolate the failing input PDF.
+                if not getattr(self, "gdb_return_region_exceptions", False):
+                    raise r
+                out.append(r)
             else:
                 out.append(r)
         return out

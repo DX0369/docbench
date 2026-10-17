@@ -10,16 +10,17 @@ from common import build_image_boxes_payload, extract_markdown_image_markers
 
 
 def mineru_identity() -> Dict[str, str]:
-    try:
-        from mineru.version import __version__ as runtime_version
-    except (ImportError, AttributeError):
-        runtime_version = os.environ.get("GDB_MINERU_VERSION", "unknown")
+    """Required identity from the version profile environment; missing values fail explicitly."""
+    from mineru.version import __version__ as runtime_version
+
     return {
-        "method_id": os.environ.get("GDB_METHOD_ID", "mineru"),
+        "method_id": os.environ["GDB_METHOD_ID"],
         "method_family": "mineru",
+        # The 3.4.4 release tag reports runtime 3.4.3; both values are kept.
         "mineru_version": runtime_version,
-        "source_revision": os.environ.get("GDB_MINERU_SOURCE_REVISION", "unknown"),
-        "checkpoint": os.environ.get("GDB_MINERU_CHECKPOINT", "unknown"),
+        "release_version": os.environ["GDB_MINERU_VERSION"],
+        "source_revision": os.environ["GDB_MINERU_SOURCE_REVISION"],
+        "checkpoint": os.environ["GDB_MINERU_CHECKPOINT"],
     }
 
 

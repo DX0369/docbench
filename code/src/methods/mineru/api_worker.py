@@ -301,7 +301,7 @@ def process_api_pdf(
         middle_json = json.loads(middle_json_path.read_text(encoding="utf-8"))
 
     doc_total_seconds = round(time.perf_counter() - doc_total_start, 6)
-    pdf_info = middle_json.get("pdf_info", [])
+    pdf_info = middle_json["pdf_info"]
     if not isinstance(pdf_info, list):
         raise TypeError("MinerU middle_json['pdf_info'] should be a list.")
 
@@ -453,6 +453,7 @@ def main() -> None:
     args.output_root = args.output_root.resolve()
     args.queue_dir = args.queue_dir.resolve()
     args.server_url = normalize_base_url(args.server_url)
+    mineru_identity()  # Fail at startup, not inside a later error record.
     configure_http_timeouts(args)
     render_runtime = load_mineru_render_runtime()
 

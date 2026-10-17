@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tempfile
 import time
@@ -41,7 +42,7 @@ from common import (  # noqa: E402
     save_markdown_bundle,
     write_json,
 )
-from methods.monkeyocr.async_runtime import AsyncRecognitionLoop  # noqa: E402
+from methods.monkeyocr.async_runtime import REGION_FAILED_PREFIX, AsyncRecognitionLoop  # noqa: E402
 from paths import TMP_ROOT
 DEFAULT_CONFIG_PATH = MONKEY_REPO_ROOT / "model_configs.yaml"
 
@@ -279,6 +280,26 @@ GROUP_PAGE_LIMIT = 20
 REGION_IMAGE_NORMALIZATION = "qwen_fetch_image_if_short_side_lt_28_v1"
 
 
+REGION_FAILED_PATTERN = re.compile(re.escape(REGION_FAILED_PREFIX) + r"(\d+)\x00")
+
+
+def failed_region_ids(value: Any) -> set[int]:
+    """Region-failure placeholders anywhere in one file's official inference result."""
+    if isinstance(value, str):
+        return {int(match) for match in REGION_FAILED_PATTERN.findall(value)}
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, (list, tuple)):
+        return set().union(*(failed_region_ids(item) for item in value))
+    return set()
+
+
+def region_failure_error(message: str) -> RuntimeError:
+    exc = RuntimeError(message)
+    exc.gdb_stage = "region_recognition"
+    return exc
+
+
 def analyze_group(runtime, paths, page_counts, pred_abandon):
     from magic_pdf.data.dataset import MultiFileDataset
 
@@ -396,6 +417,8 @@ def process_pdf_paths(args, pdf_paths, *, runtime):
     def process_group(paths, page_counts):
         failed = False
         started = time.perf_counter()
+        recognition = runtime["async_recognition"]
+        recognition.region_failures.clear()
         try:
             results = analyze_group(runtime, paths, page_counts, args.pred_abandon)
         except Exception as exc:
@@ -404,7 +427,28 @@ def process_pdf_paths(args, pdf_paths, *, runtime):
             if args.fail_fast or runtime_unusable(exc):
                 raise
             return True
-        for pdf, result, count in zip(paths, results, page_counts):
+        failures = list(recognition.region_failures)
+        file_failures = [failed_region_ids(result.get_infer_res()) for result in results]
+        if set().union(*file_failures) != set(range(len(failures))):
+            # A failed region the official pipeline dropped cannot be attributed: fail the whole group.
+            exc = region_failure_error(
+                f"{len(failures)} region request(s) failed and could not all be attributed to an input PDF: "
+                + "; ".join(failures[:3]))
+            for pdf in paths:
+                write_pdf_error(args, pdf, exc, group=paths)
+            if args.fail_fast:
+                raise exc
+            return True
+        for pdf, result, count, region_ids in zip(paths, results, page_counts, file_failures):
+            if region_ids:
+                failed = True
+                exc = region_failure_error(
+                    f"{len(region_ids)} region request(s) failed: "
+                    + "; ".join(failures[i] for i in sorted(region_ids)[:3]))
+                write_pdf_error(args, pdf, exc)
+                if args.fail_fast:
+                    raise exc
+                continue
             try:
                 export_document(args, runtime, pdf, result, count, started, paths, sum(page_counts))
             except Exception as exc:

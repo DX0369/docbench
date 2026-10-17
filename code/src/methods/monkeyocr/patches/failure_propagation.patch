@@ -19,7 +19,7 @@ index 86e579b..4d23008 100644
  
          async def bounded(img: str, q: str, idx: int):
              async with semaphore:
-@@ -94,16 +94,16 @@ class MonkeyChat_vLLM_async:
+@@ -94,16 +94,19 @@ class MonkeyChat_vLLM_async:
                      return await infer_one(img, q, req_id)
                  except Exception as e:
                      logger.error(f"Task {idx} failed: {e}")
@@ -35,7 +35,10 @@ index 86e579b..4d23008 100644
 +            if isinstance(r, BaseException):
                  logger.error(f"Task {i} exception: {r}")
 -                out.append(f"Error: {str(r)}")
-+                raise r
++                # GlobalDocBench may collect region exceptions to isolate the failing input PDF.
++                if not getattr(self, "gdb_return_region_exceptions", False):
++                    raise r
++                out.append(r)
              else:
                  out.append(r)
          return out
