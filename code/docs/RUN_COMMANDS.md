@@ -349,11 +349,11 @@ run_fixed monkeyocrv2_b_parsing 1 --latency-mode  # 逐文档；内部页面窗�
 
 ## 两文档 latency smoke（不属于正式吞吐结果）
 
-该模式只验证“单个 PDF 完成后再处理下一个 PDF”。输入清单或 native 临时输入根目录
+该模式只验证“单个 PDF 完成后再处理下一个 PDF”。输入清单
 应放在 `tmp/latency_smoke/<run_id>/`，输出和日志也必须留在 `tmp`，不能写入
 `experiments/benchmark`。
 
-服务型方法命令：
+所有方法共用命令：
 
 ```bash
 export LATENCY_ROOT="$GDB_ROOT/tmp/latency_smoke/<run_id>"
@@ -370,22 +370,12 @@ export LATENCY_INPUTS="$LATENCY_ROOT/inputs/pdf_list.txt"
     --run-name "latency_<METHOD_ID>"
 ```
 
-Marker、Youtu 和 PP-StructureV3 使用 native 入口。`inputs/native/` 中应只放两个
-输入 PDF 的软链接，不复制原始 PDF：
-
-```bash
-"$PY" src/benchmark/run_native_batch.py \
-    --methods marker,youtu,pp_structurev3 \
-    --gpus "$GPU" \
-    --latency-mode \
-    --input-root "$LATENCY_ROOT/inputs/native" \
-    --output-root-base "$LATENCY_ROOT/outputs/native" \
-    --log-root "$LATENCY_ROOT/logs/native" \
-    --run-id "latency_native"
-```
+Marker、Youtu 和 PP-StructureV3 也使用上述 `run_single_gpu.py --latency-mode` 命令，
+与其他方法共用 ready 屏障和计时口径；`run_native_batch.py` 不再提供 latency 模式。
 
 latency 模式固定使用单 GPU、单 worker，不生成 `job_*.txt`；每个方法的
-`latency_summary.json` 应记录两个文档且顺序为 1、2。
+`latency_summary.json` 应记录两个文档且顺序为 1、2。中途停止时未到达的文档记入
+`unprocessed_docs`（`reason=latency_not_reached`）。
 
 ## MinerU-Popo 组合入口
 

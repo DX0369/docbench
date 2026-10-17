@@ -197,13 +197,13 @@ def validate_doc_dir(
     if error_json.exists():
         try:
             payload = load_json(error_json)
-            if not isinstance(payload, dict):
+            if isinstance(payload, dict):
+                result.add_issue("error", error_json, "document failed; see error.json")
+            else:
                 result.add_issue("error", error_json, "error.json must contain a JSON object")
-                ok = False
         except Exception as exc:  # noqa: BLE001
             result.add_issue("error", error_json, f"error.json is invalid JSON: {exc}")
-            ok = False
-        return ok
+        return False
 
     document_md = doc_dir / "document.md"
     if not document_md.exists():
@@ -301,10 +301,6 @@ def validate_method_root(
     for doc_dir in doc_dirs:
         result.checked_docs += 1
         document_tree_method = method_root.name == "mineru_344_2605_popo"
-        if document_tree_method and (doc_dir / "error.json").exists():
-            result.add_issue("error", doc_dir, "MinerU + Popo document failed; see error.json")
-            result.failed_docs += 1
-            continue
         if document_tree_method and not (doc_dir / "error.json").exists():
             try:
                 tree = load_json(doc_dir / "document_tree.json")

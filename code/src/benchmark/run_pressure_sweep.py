@@ -87,6 +87,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--service-port-base", type=int, default=9900)
     parser.add_argument("--startup-timeout", type=int, default=900)
     parser.add_argument("--startup-poll-seconds", type=float, default=3.0)
+    parser.add_argument("--processing-timeout-seconds", type=float)
     parser.add_argument("--monitor-interval-seconds", type=float, default=2.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--keep-trial-outputs", action="store_true")
@@ -190,6 +191,8 @@ def build_trial(*, args, method, pressure, gpu_id, trial_index, subset_path, sub
             command.append(flag)
     if not args.keep_trial_outputs:
         command.append("--discard-successful-outputs")
+    if args.processing_timeout_seconds is not None:
+        command.extend(["--processing-timeout-seconds", str(args.processing_timeout_seconds)])
     mapping.update(method=method, pressure=pressure, gpu_id=gpu_id, service_port=service_port,
                    run_name=run_name, docs_per_job=docs, outer_concurrency=outer)
     return PressureTrial(method=method, pressure=pressure, gpu_id=gpu_id, service_port=service_port,

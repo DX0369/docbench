@@ -122,7 +122,6 @@ class MappingTests(unittest.TestCase):
             runner.start_vllm_service(method=profile.METHOD_ID, args=args, gpu_id=0, port=9800,
                                       config=spec.task_config, trial_log_dir=Path("unused"), method_spec=spec)
             self.assertNotIn("TORCHDYNAMO_DISABLE", run.call_args.kwargs["env_overrides"])
-        self.assertTrue(runner.uses_model_ready_timing(profile.METHOD_ID, args))
         args.gpu_id = 0
         worker_env = runner._build_worker_env_overrides(
             method=profile.METHOD_ID, config=spec.task_config, base_args=args,

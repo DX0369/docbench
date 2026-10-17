@@ -37,8 +37,8 @@ run_single_gpu.py → execution/tasks.py → methods/<family>/`。
 - `execution/page_pool.py` 是 Hunyuan、Qianfan/Unlimited page_pool 与 DeepSeek 共用的有界调度；
   `common.py` 提供同一单页 Poppler 渲染，推理/后处理/文档导出仍在方法目录。
   Hunyuan 默认一个常驻客户端、全输入一个 job，pressure 只映射全局页面任务数；
-  `methods/hunyuanocr/vllm.py` 统一直接/常驻队列入口；已删除的旧独立页面池和逐文档实现
-  可从 Git `52ccf8b` 恢复，不在当前源码中保留并行旧路径。
+  `methods/hunyuanocr/vllm.py` 统一直接/常驻队列入口；旧独立页面池和逐文档实现
+  已删除，不在当前源码中保留并行旧路径。
 
 ## 运行入口
 
@@ -51,7 +51,7 @@ run_single_gpu.py → execution/tasks.py → methods/<family>/`。
 | `run_pressure_sweep.py` | 唯一搜索：P=1～256倍增、失败或提升不足5%停止，显式保存配置 |
 | `run_single_gpu.py` | `--pressure P`或`--profile-file`固定运行一次，默认保留输出，不搜索 |
 | `build_pdf_subset.py` | 按需构建 PDF 路径子集；不替代固定调参 manifest |
-| `collect_failed_pdfs.py` | 从单方法 aggregate summary 或旧 method-queue summary 提取失败输入名单 |
+| `collect_failed_pdfs.py` | 从 `run_single_gpu.py` 的 aggregate summary 提取失败和未处理输入名单 |
 
 ## 公共执行工具
 
@@ -93,7 +93,7 @@ python src/benchmark/run_single_gpu.py \
 `--profile-file <JSON> --execution-profile <路线ID>` 加载完整配置。
 schema v2按方法/路线保存P和相关参数；旧schema、缺字段或跨路线配置明确失败。
 两入口默认20文档清单，均可用`--pdf-list-file <JSON或TXT>`或`--input-root <目录>`切换。
-旧full/coarse-refine实现从Git `f2c0196`恢复，不保留兼容入口。
+旧full/coarse-refine实现已删除，不保留兼容入口。
 
 真实 smoke 应显式指定项目 `tmp/smoke/<run_id>/` 下的输出和日志，
 不要混入正式结果。dry-run 只能核对命令连线，不能代替真实 smoke 或性能结论。
@@ -125,5 +125,4 @@ python -m compileall -q src
 - [项目状态（工作区文档）](../../PROJECT_STATE.md)
 
 旧论文分析、旧多方法队列协议及一次性输出清理工具已移到项目
-`archive/code/src_pre_consolidation_6f608b9/`，完整历史代码可从 Git 提交
-`6f608b9` 恢复。旧入口不保留兼容 wrapper；使用这里的新路径。
+`archive/code/src_pre_consolidation_6f608b9/`；对应旧提交不在当前仓库历史中。旧入口不保留兼容 wrapper；使用这里的新路径。

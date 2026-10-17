@@ -76,19 +76,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--monitor-interval-seconds", type=float, default=2.)
     parser.add_argument("--startup-timeout", type=int, default=900)
     parser.add_argument("--startup-poll-seconds", type=float, default=3.)
+    parser.add_argument("--processing-timeout-seconds", type=float,
+                        help="Optional limit after ready; on expiry workers are stopped and remaining inputs are unprocessed.")
     parser.add_argument("--allow-partial-success", action="store_true", help="Diagnostic only; never selected by the tuner.")
     parser.add_argument(
         "--latency-mode",
         action="store_true",
         help="Process the existing PDF list sequentially in memory with one document per callback.",
     )
-    parser.add_argument("--keep-trial-outputs", action="store_true", default=True)
+    parser.set_defaults(keep_trial_outputs=True)
     parser.add_argument("--discard-successful-outputs", dest="keep_trial_outputs", action="store_false",
                         help="Tuner only: discard successful temporary document outputs.")
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     add_runtime_arguments(parser)
     args = parser.parse_args()
+    if args.processing_timeout_seconds is not None and not args.processing_timeout_seconds > 0:
+        parser.error("--processing-timeout-seconds must be positive")
     if args.latency_mode and args.pressure is not None and args.pressure != 1:
         parser.error("--latency-mode requires --pressure 1")
     if args.latency_mode and args.profile_file is not None:
@@ -275,34 +279,22 @@ def start_vllm_service(
     return proc, startup_seconds
 
 
-def uses_model_ready_timing(method: str, args: argparse.Namespace) -> bool:
-    if method == "mineru_4011_standard":
-        return True
-    if method in {"teleocr_vllm_async", "lightonocr2_1b", "xiaomi_ocr_0", "jina_ocr_v1", "wevisdoc_2b", "monkeyocrv2_b_parsing"}:
-        return True
-    if method == "mineru_344_2605_popo":
-        return True  # The combination coordinator owns its inner ready/start/done.
-    if method == "unlimited_ocr_sglang":
-        return True
-    if method == "youtu":
-        return True
-    if method == "deepseek_ocr2":
-        return True
-    if method.startswith("hunyuanocr_"):
-        return True
-    if method in {"qianfan_ocr", "qianfan_ocr_think"}:
-        return True
-    if method in {"marker", "pp_structurev3", "glmocr", "paddleocr_vl_15", "paddleocr_vl_16"} or method.startswith("monkeyocr_"):
-        return True
-    if method in MINERU_PROFILES:
-        return True
-    return False
 
 
 def successful_inputs(pdf_paths, job_statuses, failed_docs, unprocessed_docs):
     recorded = {path for job in job_statuses for path in job["job_pdf_paths"]}
     excluded = {item["pdf_path"] for item in (*failed_docs, *unprocessed_docs)}
     return [path for path in pdf_paths if str(path) in recorded and str(path) not in excluded]
+
+
+def latency_unprocessed_docs(pdf_paths, job_statuses):
+    """Sequential latency workers stop after fatal failures; PDFs without a record were never reached."""
+    recorded = {path for job in job_statuses for path in job["job_pdf_paths"]}
+    return [
+        {"pdf_path": str(path), "status": "unprocessed", "reason": "latency_not_reached",
+         "job_file": None, "worker_id": None}
+        for path in pdf_paths if str(path) not in recorded
+    ]
 
 
 def load_latency_job_statuses(record_root: Path, pdf_paths: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -445,14 +437,13 @@ def run_trial(
     service_proc: subprocess.Popen[str] | None = None
     startup_seconds = 0.0
     worker_procs: list[tuple[str, Path, subprocess.Popen[str]]] = []
-    model_ready_timing = uses_model_ready_timing(method, base_args)
     coordinator_timing = method == "mineru_344_2605_popo"
     coordinator_startup_seconds = None
     processing_start = None
     processing_seconds = None
     trial_error = None
     worker_results: List[Dict[str, Any]] = []
-    if model_ready_timing and not coordinator_timing and not base_args.dry_run:
+    if not coordinator_timing and not base_args.dry_run:
         timing_dir = queue_dir / "timing"
         timing_dir.mkdir(parents=True, exist_ok=False)
         write_timing_state(timing_dir / "control.json", {"parent_pid": os.getpid(), "method": method})
@@ -539,11 +530,20 @@ def run_trial(
             for worker_index in range(concurrency):
                 launch_native_worker(worker_index)
 
-        if model_ready_timing and not coordinator_timing and not base_args.dry_run:
+        if not coordinator_timing and not base_args.dry_run:
             processing_start = start_queue_processing(queue_dir, worker_procs,
                 timeout=base_args.startup_timeout, service=service_proc)
+        deadline = (None if base_args.processing_timeout_seconds is None or processing_start is None
+                    else processing_start + base_args.processing_timeout_seconds)
         for worker_id, worker_log, proc in worker_procs:
-            return_code = popo_commands.wait_for_coordinator(proc) if coordinator_timing else proc.wait()
+            if coordinator_timing:
+                return_code = popo_commands.wait_for_coordinator(proc)
+            else:
+                try:
+                    return_code = proc.wait(None if deadline is None else max(0.0, deadline - time.perf_counter()))
+                except subprocess.TimeoutExpired:
+                    raise TimeoutError(
+                        f"processing exceeded --processing-timeout-seconds={base_args.processing_timeout_seconds}") from None
             worker_results.append(
                 {
                     "worker_id": worker_id,
@@ -559,7 +559,7 @@ def run_trial(
                 processing_seconds = state["processing_seconds"]
             if state["status"] != "completed":
                 trial_error = "Popo coordinator did not complete successfully; see its run_status.json"
-        elif model_ready_timing and not base_args.dry_run:
+        elif not base_args.dry_run:
             processing_seconds = round(queue_processing_seconds(
                 queue_dir, [worker_id for worker_id, _, _ in worker_procs], processing_start), 6)
     except Exception as exc:
@@ -596,12 +596,14 @@ def run_trial(
         job_statuses = collect_done_statuses(done_dir)
     failed_jobs = [payload for payload in job_statuses if bool(payload.get("failed"))]
     failed_docs = collect_failed_docs(job_statuses)
-    unprocessed_docs = (
-        [] if base_args.latency_mode
-        else collect_unprocessed_docs(job_statuses, queue_dir)
-    )
+    if not base_args.latency_mode:
+        unprocessed_docs = collect_unprocessed_docs(job_statuses, queue_dir)
+    elif base_args.dry_run:
+        unprocessed_docs = []
+    else:
+        unprocessed_docs = latency_unprocessed_docs(pdf_paths, job_statuses)
     completed_inputs = successful_inputs(pdf_paths, job_statuses, failed_docs, unprocessed_docs)
-    if model_ready_timing and not coordinator_timing and not base_args.dry_run:
+    if not coordinator_timing and not base_args.dry_run:
         try:
             page_counts = {
                 Path(path): count
@@ -618,7 +620,6 @@ def run_trial(
     queue_complete = len(job_statuses) == len(jobs)
     workers_ok = all(item["status"] == "ok" for item in worker_results)
     queue_success = queue_complete and not failed_jobs and not failed_docs and not unprocessed_docs and workers_ok and trial_error is None
-    worker_exit_failures_ignored = False
     partial_success_accepted = bool(
         base_args.allow_partial_success and not base_args.dry_run and queue_complete and failed_jobs and trial_error is None
     )
@@ -699,7 +700,7 @@ def run_trial(
         "service_startup_seconds": startup_seconds if startup_seconds else None,
         "startup_seconds": (coordinator_startup_seconds if coordinator_timing else
                             round(processing_start - trial_start, 6) if processing_start is not None else None),
-        "timing_scope": "models_ready_to_outputs_complete_v1" if model_ready_timing else "legacy_service_startup_subtracted_includes_worker_startup_and_cleanup",
+        "timing_scope": "models_ready_to_outputs_complete_v1",
         "trial_error": trial_error,
         "successful_doc_count": successful_docs,
         "successful_page_count": successful_pages,
@@ -724,7 +725,6 @@ def run_trial(
         "failed_doc_count": len(failed_docs),
         "failed_docs": failed_docs,
         "partial_success_accepted": partial_success_accepted,
-        "worker_exit_failures_ignored": worker_exit_failures_ignored,
         "worker_results": worker_results,
         "job_statuses": job_statuses,
         "pressure": base_args.pressure,
