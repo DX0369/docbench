@@ -659,15 +659,17 @@ def run_trial(
         for path in completed_inputs:
             output = get_doc_output_dir(base_args.input_root, trial_output_root / method, path)
             metrics = json.loads((output / "metrics.json").read_text())
-            if metrics["quality_warnings"]:
+            if metrics["warnings"]:
                 warning_docs.append({"pdf_path": str(path), "input_page_count": metrics["input_page_count"],
                     "output_segment_count": metrics["output_segment_count"], "finish_reason": metrics["finish_reason"],
-                    "quality_warnings": metrics["quality_warnings"]})
+                    "warnings": metrics["warnings"]})
         quality_summary = {
             "throughput_page_basis": "completed_request_input",
             "quality_warning_doc_count": len(warning_docs),
-            "truncated_doc_count": sum("generation_length" in doc["quality_warnings"] for doc in warning_docs),
-            "page_mismatch_doc_count": sum("page_count_mismatch" in doc["quality_warnings"] for doc in warning_docs),
+            "truncated_doc_count": sum(any(w["reason"] == "generation_length_limit" for w in doc["warnings"])
+                                       for doc in warning_docs),
+            "page_mismatch_doc_count": sum(any(w["reason"] == "page_count_mismatch" for w in doc["warnings"])
+                                           for doc in warning_docs),
             "quality_warning_docs": warning_docs,
         }
     elif method in {"qianfan_ocr", "qianfan_ocr_think"}:
@@ -675,10 +677,10 @@ def run_trial(
         for path in completed_inputs:
             output = get_doc_output_dir(base_args.input_root, trial_output_root / method, path)
             metrics = json.loads((output / "metrics.json").read_text())
-            if metrics["quality_warnings"]:
+            if metrics["warnings"]:
                 warning_docs.append({"pdf_path": str(path),
                     "invalid_image_box_count": metrics["invalid_image_box_count"],
-                    "quality_warnings": metrics["quality_warnings"]})
+                    "warnings": metrics["warnings"]})
         quality_summary = {"quality_warning_doc_count": len(warning_docs),
                            "quality_warning_docs": warning_docs}
     valid_processing = processing_seconds is not None and processing_seconds > 0

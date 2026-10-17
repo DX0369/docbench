@@ -14,7 +14,7 @@ from common import (
     get_doc_output_dir, save_markdown_bundle, write_json,
     pdf_page_count as page_count, render_pdf_page,
 )
-from image_vllm_client import image_to_data_url
+from image_vllm_client import count_http_attempts, image_to_data_url, sdk_retry_warning
 from methods.qianfan_ocr.prompt import DOCUMENT_PARSING_PROMPT, PROMPT_ID
 from paths import TMP_ROOT
 
@@ -85,8 +85,8 @@ def extract_image_boxes(text, image_path, page):
                     if not (0 <= x1 < x2 <= 1000 and 0 <= y1 < y2 <= 1000):
                         reason = "out_of_range_or_unordered"
             if reason is not None:
-                warnings.append({"warning": "invalid_image_box", "page_index": page,
-                                 "box_index": index, "reason": reason})
+                warnings.append({"page_number": page, "reason": "invalid_image_box",
+                                 "box_index": index, "detail": reason})
                 continue
             x1, y1, x2, y2 = coords[0]
             absolute = [int(x1 * width / 1000), int(y1 * height / 1000),
@@ -117,7 +117,7 @@ def export(args, pdf, count, document, pages, records, boxes, started, *, warnin
         "page_boundary_source": "input_pdf",
         "pages": build_page_records(pages or [], [r["request_seconds"] for r in records]),
         "requests": records, "doc_total_seconds": time.perf_counter() - started,
-        "quality_warnings": list(warnings), "invalid_image_box_count": sum(w["warning"] == "invalid_image_box" for w in warnings),
+        "warnings": list(warnings), "invalid_image_box_count": sum(w["reason"] == "invalid_image_box" for w in warnings),
         "document_markdown_path": "document.md",
         "notes": [],
     }
@@ -159,13 +159,14 @@ def record_error(args, pdf, exc):
 
 def run_page(args, client, pdf, page):
     with render_pdf_page(pdf, page, args.dpi, temp_root(args)) as image:
-        with error_context("inference", page):
+        with error_context("inference", page), count_http_attempts() as attempts:
             text, record = request(args, client, image)
         with error_context("export", page):
             boxes, warnings = extract_image_boxes(text, image, page)
         record["page_index"] = page
         if record["finish_reason"] == "length":
-            warnings.append({"warning": "generation_length_limit", "page_index": page})
+            warnings.append({"page_number": page, "reason": "generation_length_limit"})
         if record.pop("think_unterminated", False):
-            warnings.append({"warning": "think_unterminated", "page_index": page})
+            warnings.append({"page_number": page, "reason": "think_unterminated"})
+        warnings.extend(sdk_retry_warning(page, attempts[0]))
         return text, record, boxes, warnings

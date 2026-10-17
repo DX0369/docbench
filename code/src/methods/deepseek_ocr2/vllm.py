@@ -7,6 +7,7 @@ import base64
 import httpx
 import json
 import multiprocessing
+import os
 import re
 import sys
 import time
@@ -370,6 +371,7 @@ def write_pdf_outputs(
         "seed": args.seed,
         "scheduler": "page_pool",
         "page_concurrency": args.page_concurrency,
+        "render_workers": args.render_workers,
         "page_count": len(page_markdowns),
         "render_seconds": None,
         "preprocess_seconds": None,
@@ -466,9 +468,13 @@ def main() -> None:
     args.output_root = args.output_root.resolve()
     with ExitStack() as stack:
         http_client = stack.enter_context(httpx.Client(timeout=args.timeout, trust_env=False))
+        # Rendering parallelism follows the page pool P, as pdftoppm does for the other page-pool adapters.
+        render_workers = args.render_workers = min(args.page_concurrency, os.cpu_count())
         renderer = stack.enter_context(ProcessPoolExecutor(
-            max_workers=1, mp_context=multiprocessing.get_context("spawn")))
-        render_result(renderer, render.ready)  # Import/startup only; no PDF warmup.
+            max_workers=render_workers, mp_context=multiprocessing.get_context("spawn")))
+        # Import/startup only; no PDF warmup. Concurrent submissions start the worker processes before ready.
+        for future in [renderer.submit(render.ready) for _ in range(render_workers)]:
+            future.result()
         if args.queue_dir is not None:
             failed = run_pdf_queue_worker(
                 queue_dir=args.queue_dir, worker_id=args.worker_id, fail_fast=args.fail_fast,

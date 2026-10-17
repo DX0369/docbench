@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
@@ -12,7 +13,17 @@ import httpx
 from openai import OpenAI
 
 
+_HTTP_ATTEMPTS: ContextVar[list[int] | None] = ContextVar("gdb_http_attempts", default=None)
+
+
+def _count_http_attempt(_request: httpx.Request) -> None:
+    attempts = _HTTP_ATTEMPTS.get()
+    if attempts is not None:
+        attempts[0] += 1
+
+
 def build_openai_client(base_url: str, timeout: float) -> OpenAI:
+    # The SDK keeps its default transport retries; the request hook only counts attempts.
     return OpenAI(
         api_key="EMPTY",
         base_url=base_url.rstrip("/") + "/",
@@ -20,8 +31,27 @@ def build_openai_client(base_url: str, timeout: float) -> OpenAI:
         http_client=httpx.Client(
             timeout=timeout,
             trust_env=False,
+            event_hooks={"request": [_count_http_attempt]},
         ),
     )
+
+
+@contextmanager
+def count_http_attempts():
+    """Yield a one-item list holding the HTTP attempts sent by this thread inside the block."""
+    attempts = [0]
+    token = _HTTP_ATTEMPTS.set(attempts)
+    try:
+        yield attempts
+    finally:
+        _HTTP_ATTEMPTS.reset(token)
+
+
+def sdk_retry_warning(page_number: int, attempts: int) -> list[dict[str, Any]]:
+    """One logical request sends one HTTP attempt; extra attempts are SDK transport retries."""
+    if attempts > 1:
+        return [{"page_number": page_number, "reason": "sdk_transport_retry", "count": attempts - 1}]
+    return []
 
 
 def propagate_chat_completion_errors(client: Any, operation: Callable[..., Any]) -> Callable[..., Any]:

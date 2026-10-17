@@ -37,8 +37,9 @@ def write_document_outputs(
     output = get_doc_output_dir(args.input_root, args.output_root, pdf_path)
     from TeleOCR.src.vlm_middle_json_mkcontent import union_make
 
-    page_markdowns = [union_make([page], "") for page in pdf_info]
-    document_markdown = union_make(pdf_info, "")
+    # Official markdown uses the "images" bucket; page files sit one level deeper.
+    page_markdowns = [union_make([page], "../images") for page in pdf_info]
+    document_markdown = union_make(pdf_info, "images")
     save_markdown_bundle(output, page_markdowns, document_markdown)
 
     write_json(output / "metrics.json", {
@@ -63,12 +64,13 @@ def write_document_outputs(
         "doc_total_seconds": round(processing_seconds, 6),
         "document_markdown_path": "document.md",
         "pages": build_page_records(page_markdowns, ["N/A"] * len(page_markdowns)),
-        "warnings": [{"reason": key, "count": count} for key, count in sorted(quality_counts.items())],
+        "warnings": [{"page_number": None, "reason": key, "count": count}
+                     for key, count in sorted(quality_counts.items())],
         "asset_policy": "no_image_assets",
         "notes": [
             "One resident official TeleOCR vllm-async-engine runtime is reused across documents.",
             "Documents are submitted sequentially; layout and region requests within the current document use max_concurrency.",
-            "The adapter calls aio_doc_analyze directly and passes image_writer=None.",
+            "The adapter calls aio_doc_analyze with a discarding image_writer: official image links are kept as dangling references.",
             "No raw response, cropped image, or layout PDF asset is retained.",
         ],
     })

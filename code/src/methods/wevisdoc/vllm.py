@@ -33,6 +33,8 @@ from execution.workers import run_pdf_queue_worker  # noqa: E402
 from image_vllm_client import (  # noqa: E402
     build_openai_client,
     content_to_text,
+    count_http_attempts,
+    sdk_retry_warning,
 )
 from method_paths import method_repo_path  # noqa: E402
 from paths import TMP_ROOT  # noqa: E402
@@ -102,8 +104,9 @@ def run_page(args: argparse.Namespace, client: Any, pdf: Path, page: int):
     render_root = TMP_ROOT / "runtime" / "wevisdoc"
     with render_pdf_page(pdf, page, args.dpi, render_root) as image_path:
         rendered = time.perf_counter() - started
-        text, finish_reason = request_page(args, client, image_path)
-    return text, time.perf_counter() - started, rendered, finish_reason
+        with count_http_attempts() as attempts:
+            text, finish_reason = request_page(args, client, image_path)
+    return text, time.perf_counter() - started, rendered, finish_reason, attempts[0]
 
 
 def export_document(args: argparse.Namespace, pdf: Path, results, started: float) -> None:
@@ -112,10 +115,14 @@ def export_document(args: argparse.Namespace, pdf: Path, results, started: float
     warnings = []
     for page_number, item in enumerate(results, start=1):
         finish_reason = item[3]
-        if finish_reason != "stop":
-            warnings.append({"page_number": page_number, "reason": finish_reason})
+        if finish_reason == "length":
+            warnings.append({"page_number": page_number, "reason": "generation_length_limit"})
+        elif finish_reason != "stop":
+            warnings.append({"page_number": page_number, "reason": "abnormal_finish_reason",
+                             "finish_reason": finish_reason})
         if not item[0].strip():
             warnings.append({"page_number": page_number, "reason": "empty_content"})
+        warnings.extend(sdk_retry_warning(page_number, item[4]))
     save_markdown_bundle(output, pages, concat_document_markdown(pages))
     write_json(output / "metrics.json", {
         "method": DISPLAY_NAME,

@@ -647,6 +647,10 @@ def main() -> None:
     unknown = [item for item in selected if item not in SERVICE_TASKS]
     if unknown:
         raise SystemExit(f"Unknown methods: {', '.join(unknown)}")
+    existing = [method for method in selected
+                if not args.skip_existing and any((Path(args.output_root_base) / method).glob("*"))]
+    if existing:
+        raise SystemExit(f"Output already exists for {', '.join(existing)}; use a new --run-id or --skip-existing.")
     selected_monkey_variants = [item for item in selected if item.startswith("monkeyocr_")]
     if args.monkey_models_dir and len(selected_monkey_variants) > 1:
         raise SystemExit(

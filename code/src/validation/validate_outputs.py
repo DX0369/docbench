@@ -152,10 +152,11 @@ def validate_unlimited_metrics(metrics: dict[str, Any], expected: int) -> None:
     if type(segments) is not int or segments < 0:
         raise ValueError("Unlimited output_segment_count must be a nonnegative integer")
     mismatch = segments != expected
-    warnings = (["generation_length"] if metrics["finish_reason"] == "length" else [])
+    warnings = (["generation_length_limit"] if metrics["finish_reason"] == "length" else [])
     if mismatch:
         warnings.append("page_count_mismatch")
-    if metrics["quality_warnings"] != warnings:
+    recorded = metrics["warnings"]
+    if [w["reason"] for w in recorded] != warnings or any(w["page_number"] is not None for w in recorded):
         raise ValueError("Unlimited quality warnings do not match generation/segment counts")
     if mismatch:
         if (metrics["output_scope"] != "document_only" or metrics["pages"] != []

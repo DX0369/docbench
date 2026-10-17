@@ -42,6 +42,8 @@ class GpuMonitor:
         self.gpu_id = gpu_id
         self.interval_seconds = interval_seconds
         self.samples: list[dict[str, float]] = []
+        self.failed_polls = 0
+        self.last_error: str | None = None
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -51,6 +53,10 @@ class GpuMonitor:
     def stop(self) -> None:
         self._stop.set()
         self._thread.join(timeout=max(2.0, self.interval_seconds + 1.0))
+
+    def _record_failure(self, message: str) -> None:
+        self.failed_polls += 1
+        self.last_error = message
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -65,7 +71,9 @@ class GpuMonitor:
                     capture_output=True,
                     text=True,
                 )
-                if completed.returncode == 0:
+                if completed.returncode != 0:
+                    self._record_failure(f"nvidia-smi exit {completed.returncode}: {completed.stderr.strip()[:200]}")
+                else:
                     for line in completed.stdout.splitlines():
                         parts = [part.strip() for part in line.split(",")]
                         if len(parts) != 4:
@@ -82,19 +90,25 @@ class GpuMonitor:
                             }
                         )
                         break
-            except Exception:
-                pass
+                    else:
+                        self._record_failure(f"GPU {self.gpu_id} missing from nvidia-smi output")
+            except Exception as exc:  # noqa: BLE001 - recorded in the summary, never silent
+                self._record_failure(f"{type(exc).__name__}: {exc}")
             self._stop.wait(self.interval_seconds)
 
-    def summary(self) -> dict[str, float | None]:
+    def summary(self) -> dict[str, Any]:
+        health = {"sample_count": len(self.samples), "failed_polls": self.failed_polls,
+                  "last_error": self.last_error}
         if not self.samples:
             return {
                 "avg_gpu_util_percent": None,
                 "peak_gpu_util_percent": None,
                 "avg_memory_used_mb": None,
                 "peak_memory_used_mb": None,
+                **health,
             }
         return {
+            **health,
             "avg_gpu_util_percent": round(
                 sum(item["utilization_gpu"] for item in self.samples) / len(self.samples),
                 3,

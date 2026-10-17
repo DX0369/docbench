@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextvars import ContextVar
 import json
 from pathlib import Path
-import shutil
 import sys
 import tempfile
 import time
@@ -68,9 +67,6 @@ def export_document(args, pdf, native, record, expected_pages, output, started, 
                 "page_size": sizes[page - 1], "box_source": "monkeyocrv2_preprocessed_layout_bbox",
             })
     pages = official.result2md([str(i) for i in range(expected_pages)], grouped)
-    images = native / "images"
-    if images.exists():
-        shutil.copytree(images, output / "images")
     # Page files have the same depth as official markdowns; document.md is one
     # level higher, so only its image reference prefix changes.
     document = concat_document_markdown(pages).replace("../images/", "images/")
@@ -80,7 +76,7 @@ def export_document(args, pdf, native, record, expected_pages, output, started, 
     })
     write_json(output / "image_boxes.json", build_image_boxes_payload(
         method=DISPLAY_NAME, pdf_path=pdf, entries=boxes,
-        notes=["Coordinates use official preprocessed page sizes; referenced image assets are retained."],
+        notes=["Coordinates use official preprocessed page sizes; official image references are kept as dangling links and no image assets are saved."],
     ))
     write_json(output / "metrics.json", {
         "method": DISPLAY_NAME, "method_id": METHOD_ID, "execution_profile": PROFILE_ID,
@@ -91,7 +87,7 @@ def export_document(args, pdf, native, record, expected_pages, output, started, 
         "document_markdown_path": "document.md", "page_max_inflight": args.page_max_inflight,
         "server_max_inflight": 1024, "preprocess_batch_size": 32, "max_pixels": 1003520,
         "request_timeout": 300, "http_max_retries": 5, "http_retry_backoff": 1.0,
-        "dpi": 200, "asset_policy": "referenced_images_retained", "warnings": [],
+        "dpi": 200, "asset_policy": "no_image_assets", "warnings": [],
     })
 
 

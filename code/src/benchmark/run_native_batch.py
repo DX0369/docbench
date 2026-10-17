@@ -214,6 +214,10 @@ def main() -> None:
     unknown = [item for item in selected if item not in NATIVE_TASKS]
     if unknown:
         raise SystemExit(f"Unknown methods: {', '.join(unknown)}")
+    existing = [method for method in selected
+                if not args.skip_existing and any((Path(args.output_root_base) / method).glob("*"))]
+    if existing:
+        raise SystemExit(f"Output already exists for {', '.join(existing)}; use a new --run-id or --skip-existing.")
     gpus = [int(item.strip()) for item in args.gpus.split(",") if item.strip()]
     if not gpus:
         raise SystemExit("No GPUs provided.")

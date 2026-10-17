@@ -14,6 +14,13 @@ from pathlib import Path
 from typing import Any
 
 
+class _DiscardImages:
+    """Official ``image_writer`` interface: crops get their official image_path but are never stored."""
+
+    def add_image(self, img_bytes, image_name) -> None:
+        pass
+
+
 class TeleOCRRuntime:
     def __init__(self, args: Any) -> None:
         self.loop = asyncio.new_event_loop()
@@ -145,7 +152,7 @@ class TeleOCRRuntime:
                 aio_doc_analyze(
                     pdf_bytes,
                     predictor=self.predictor,
-                    image_writer=None,
+                    image_writer=_DiscardImages(),
                 )
             )
             engine = getattr(getattr(self.predictor, "client", None), "vllm_async_llm", None)

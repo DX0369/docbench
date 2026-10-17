@@ -19,7 +19,7 @@ from common import (
 from config.execution_profiles import resolve_execution_profile
 from execution.page_pool import run_page_pool
 from execution.workers import run_pdf_queue_worker
-from image_vllm_client import build_openai_client
+from image_vllm_client import build_openai_client, count_http_attempts, sdk_retry_warning
 from method_paths import method_repo_path
 from paths import TMP_ROOT
 
@@ -82,8 +82,9 @@ def run_page(args, client, pdf, page):
     with error_context("page", page_number=page):
         with render_pdf_page(pdf, page, args.dpi, TMP_ROOT / "runtime" / "xiaomi_ocr") as image:
             rendered = time.perf_counter() - started
-            text, finish_reason = request_page(args, client, image)
-    return text, time.perf_counter() - started, rendered, finish_reason
+            with count_http_attempts() as attempts:
+                text, finish_reason = request_page(args, client, image)
+    return text, time.perf_counter() - started, rendered, finish_reason, attempts[0]
 
 
 def export_document(args, pdf, results, started):
@@ -91,6 +92,7 @@ def export_document(args, pdf, results, started):
     pages = [item[0] for item in results]
     warnings = [{"page_number": page, "reason": "generation_length_limit"}
                 for page, item in enumerate(results, 1) if item[3] == "length"]
+    warnings += [w for page, item in enumerate(results, 1) for w in sdk_retry_warning(page, item[4])]
     save_markdown_bundle(output, pages, concat_document_markdown(pages))
     write_json(output / "metrics.json", {
         "method": DISPLAY_NAME, "method_id": METHOD_ID,

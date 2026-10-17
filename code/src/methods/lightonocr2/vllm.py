@@ -30,7 +30,7 @@ from common import (  # noqa: E402
 from config.execution_profiles import resolve_execution_profile  # noqa: E402
 from execution.page_pool import run_page_pool  # noqa: E402
 from execution.workers import run_pdf_queue_worker  # noqa: E402
-from image_vllm_client import build_openai_client, content_to_text, image_to_data_url  # noqa: E402
+from image_vllm_client import build_openai_client, content_to_text, count_http_attempts, image_to_data_url, sdk_retry_warning  # noqa: E402
 from paths import TMP_ROOT  # noqa: E402
 
 
@@ -111,8 +111,9 @@ def run_page(args: argparse.Namespace, client: Any, pdf: Path, page: int):
         finally:
             image.close()
         rendered = round(time.perf_counter() - started, 6)
-        text, finish_reason = request_page(args, client, image_path)
-    return text, round(time.perf_counter() - started, 6), rendered, finish_reason
+        with count_http_attempts() as attempts:
+            text, finish_reason = request_page(args, client, image_path)
+    return text, round(time.perf_counter() - started, 6), rendered, finish_reason, attempts[0]
 
 
 def export_document(args: argparse.Namespace, pdf: Path, results, started: float) -> None:
@@ -144,7 +145,8 @@ def export_document(args: argparse.Namespace, pdf: Path, results, started: float
         "pages": build_page_records(pages, latencies),
         "page_finish_reasons": [item[3] for item in results],
         "warnings": [{"page_number": i, "reason": "generation_length_limit"}
-                     for i, item in enumerate(results, 1) if item[3] == "length"],
+                     for i, item in enumerate(results, 1) if item[3] == "length"]
+                    + [w for i, item in enumerate(results, 1) for w in sdk_retry_warning(i, item[4])],
         "asset_policy": "no_image_assets",
         "notes": [
             "One resident official vLLM service; each request contains exactly one page image.",

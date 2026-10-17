@@ -31,7 +31,7 @@ from common import (
     save_markdown_bundle,
     write_json,
 )
-from image_vllm_client import build_openai_client, chat_with_image
+from image_vllm_client import build_openai_client, chat_with_image, count_http_attempts, sdk_retry_warning
 
 
 DEFAULT_PROMPT = """You are an AI assistant specialized in converting PDF images to Markdown format. Please follow these instructions for the conversion:
@@ -124,6 +124,7 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
     page_markdowns: List[str] = []
     page_latencies: List[float] = []
     page_finish_reasons: List[Optional[str]] = []
+    page_attempts: List[int] = []
     page_sizes: List[Any] = []
     render_dir: Path | None = None
     created_temp_dir = False
@@ -146,19 +147,21 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
         extra_body = build_extra_body(args)
         for image_path in page_images:
             page_start = time.perf_counter()
-            page_markdown, finish_reason = chat_with_image(
-                client=client,
-                model_name=args.model_name,
-                image_path=image_path,
-                prompt=args.prompt,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                max_tokens=args.max_tokens,
-                seed=args.seed,
-                extra_body=extra_body,
-            )
+            with count_http_attempts() as attempts:
+                page_markdown, finish_reason = chat_with_image(
+                    client=client,
+                    model_name=args.model_name,
+                    image_path=image_path,
+                    prompt=args.prompt,
+                    temperature=args.temperature,
+                    top_p=args.top_p,
+                    max_tokens=args.max_tokens,
+                    seed=args.seed,
+                    extra_body=extra_body,
+                )
             page_seconds = round(time.perf_counter() - page_start, 6)
             page_finish_reasons.append(finish_reason)
+            page_attempts.append(attempts[0])
             page_markdowns.append(page_markdown.rstrip() + "\n" if page_markdown.strip() else "")
             page_latencies.append(page_seconds)
 
@@ -190,7 +193,8 @@ def run_one_pdf(args: argparse.Namespace, client: Any, pdf_path: Path) -> None:
             "pages": build_page_records(page_markdowns, page_latencies),
             "page_finish_reasons": page_finish_reasons,
             "warnings": [{"page_number": i, "reason": "generation_length_limit"}
-                         for i, reason in enumerate(page_finish_reasons, 1) if reason == "length"],
+                         for i, reason in enumerate(page_finish_reasons, 1) if reason == "length"]
+                        + [w for i, n in enumerate(page_attempts, 1) for w in sdk_retry_warning(i, n)],
             "notes": notes,
         }
         write_json(doc_output_dir / "metrics.json", metrics)

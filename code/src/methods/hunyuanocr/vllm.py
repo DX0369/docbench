@@ -33,7 +33,9 @@ from common import (  # noqa: E402
     save_markdown_bundle,
     write_json,
 )
-from image_vllm_client import build_image_chat_messages, build_openai_client, chat_with_image  # noqa: E402
+from image_vllm_client import (  # noqa: E402
+    build_image_chat_messages, build_openai_client, chat_with_image, count_http_attempts, sdk_retry_warning,
+)
 from method_paths import method_repo_path  # noqa: E402
 from common import pdf_page_count, render_pdf_page  # noqa: E402
 from config.execution_profiles import resolve_execution_profile  # noqa: E402
@@ -150,7 +152,7 @@ def parse_args() -> argparse.Namespace:
 def infer_page(args, client, image_path, page_number):
     page_start = time.perf_counter()
     early_stopped = False
-    with error_context("inference", page_number):
+    with error_context("inference", page_number), count_http_attempts() as attempts:
         generation_kwargs = {
             "temperature": 0.0, "top_p": args.top_p, "max_tokens": args.max_tokens, "seed": 1234,
             "extra_body": {"top_k": args.top_k, "repetition_penalty": args.repetition_penalty,
@@ -174,7 +176,7 @@ def infer_page(args, client, image_path, page_number):
                                                   system_prompt="", **generation_kwargs)
     with error_context("postprocess", page_number):
         text, stats = postprocess_output(text, args.prompt_profile)
-    return text, round(time.perf_counter() - page_start, 6), stats, early_stopped, finish_reason
+    return text, round(time.perf_counter() - page_start, 6), stats, early_stopped, finish_reason, attempts[0]
 
 
 def run_page(args, client, pdf, page):
@@ -199,7 +201,7 @@ def export_document(args, pdf, results, started):
         "prompt_profile": args.prompt_profile, "max_tokens": args.max_tokens,
         "top_p": args.top_p, "top_k": args.top_k, "repetition_penalty": args.repetition_penalty,
         "dpi": args.dpi, "page_concurrency": args.page_concurrency, "page_count": len(pages),
-        "page_render_seconds_sum": round(sum(r[5] for r in results), 6),
+        "page_render_seconds_sum": round(sum(r[6] for r in results), 6),
         "page_inference_seconds_sum": round(sum(latencies), 6),
         "doc_total_seconds": round(time.perf_counter() - started, 6),
         "document_markdown_path": "document.md", "pages": build_page_records(pages, latencies),
@@ -207,7 +209,8 @@ def export_document(args, pdf, results, started):
         # Early-stopped streams are closed by the official client, so their finish_reason is None.
         "page_finish_reasons": [r[4] for r in results],
         "warnings": [{"page_number": i, "reason": "generation_length_limit"}
-                     for i, r in enumerate(results, 1) if r[4] == "length"],
+                     for i, r in enumerate(results, 1) if r[4] == "length"]
+                    + [w for i, r in enumerate(results, 1) for w in sdk_retry_warning(i, r[5])],
         "notes": ["Independent page images; document markdown is merged in original page order.",
                   "Page render/inference sums overlap under concurrency and are not document wall time."],
     }

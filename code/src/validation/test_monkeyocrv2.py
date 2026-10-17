@@ -59,7 +59,7 @@ class MonkeyOCRv2Tests(unittest.TestCase):
             self.assertIn("images/figure.jpg", document)
             self.assertIn("<table>", document)
             self.assertNotIn("header", document)
-            self.assertTrue((output / "images/figure.jpg").is_file())
+            self.assertFalse((output / "images").exists())
             self.assertEqual(json.loads((output / "metrics.json").read_text())["page_count"], 2)
             for broken in ({"image_size": record["image_size"]},
                            {"image_size": record["image_size"], "layouts": [{"page_num": 0}]}):

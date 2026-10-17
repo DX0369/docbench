@@ -282,10 +282,6 @@ def run_one_pdf(
     pdf_path: Path,
 ) -> None:
     doc_output_dir = get_doc_output_dir(args.input_root, args.output_root, pdf_path)
-    if should_skip(args, pdf_path):
-        print(f"[skip] {pdf_path}")
-        return
-
     doc_total_start = time.perf_counter()
     with error_context("render"):
         page_paths, render_dir, created_temp_dir = render_pdf_pages(pdf_path, dpi=args.dpi)
@@ -320,11 +316,13 @@ def run_one_pdf(
     page_markdowns: list[str] = []
     image_entries: list[dict[str, Any]] = []
     page_mismatch = len(raw_pages) != len(page_paths)
-    quality_warnings = []
+    # Whole-document request: these warnings have no page attribution.
+    warnings = []
     if generation["finish_reason"] == "length":
-        quality_warnings.append("generation_length")
+        warnings.append({"page_number": None, "reason": "generation_length_limit"})
     if page_mismatch:
-        quality_warnings.append("page_count_mismatch")
+        warnings.append({"page_number": None, "reason": "page_count_mismatch",
+                         "output_segment_count": len(raw_pages)})
         # No reliable mapping from segments to physical pages: keep the entire
         # model response, including tags, without fabricated page views/boxes.
         remove_dir_if_exists(doc_output_dir / "pages")
@@ -365,7 +363,7 @@ def run_one_pdf(
         "input_page_count": len(page_paths),
         "page_count": len(page_paths),
         "output_segment_count": len(raw_pages),
-        "quality_warnings": quality_warnings,
+        "warnings": warnings,
         "output_scope": "document_only" if page_mismatch else "document_and_pages",
         "page_boundary_source": "unavailable" if page_mismatch else "model_page_tokens",
         "render_seconds": "included_in_doc_total",
@@ -396,7 +394,7 @@ def run_one_pdf(
         ),
     )
     remove_file_if_exists(doc_output_dir / "error.json")
-    print(f"[done] {pdf_path}" + (f" quality_warnings={quality_warnings}" if quality_warnings else ""))
+    print(f"[done] {pdf_path}" + (f" warnings={[w['reason'] for w in warnings]}" if warnings else ""))
 
 
 def write_pdf_error(args: argparse.Namespace, pdf_path: Path, exc=None) -> None:
@@ -433,6 +431,10 @@ def process_pdf_paths(
         return process_page_pool(args, pdf_paths, logit_processor=logit_processor)
     had_failure = False
     for pdf_path in pdf_paths:
+        # Outside the try: an existing output must abort, never receive a new error.json.
+        if should_skip(args, pdf_path):
+            print(f"[skip] {pdf_path}")
+            continue
         try:
             run_one_pdf(
                 args,
@@ -460,8 +462,12 @@ def execution_profile(args):
 
 def should_skip(args, pdf):
     output = get_doc_output_dir(args.input_root, args.output_root, pdf)
-    if not args.skip_existing or not document_completed(output):
+    if not document_completed(output):
+        if output.exists() and any(output.iterdir()):
+            raise FileExistsError(f"Existing partial/failed output must be retained; use a new run: {output}")
         return False
+    if not args.skip_existing:
+        raise FileExistsError(f"Existing result must not be overwritten; use a new run or --skip-existing: {output}")
     metrics = json.loads((output / "metrics.json").read_text())
     recipe = RECIPES[args.request_mode]
     if (metrics["execution_profile"] != execution_profile(args)
@@ -511,7 +517,7 @@ def process_page_pool(args, pdf_paths, *, logit_processor):
         records = build_page_records(pages, [round(r["seconds"], 6) for r in ordered])
         for record, result in zip(records, ordered):
             record.update(result["generation"], page_size=list(result["size"]), request_completed=True)
-        warnings = [{"page_number": i, "warning": "generation_length"}
+        warnings = [{"page_number": i, "reason": "generation_length_limit"}
                     for i, r in enumerate(ordered, 1) if r["generation"]["finish_reason"] == "length"]
         write_json(output / "metrics.json", {
             "method": METHOD_NAME, "method_id": METHOD_ID, "backend": "sglang",
@@ -522,7 +528,7 @@ def process_page_pool(args, pdf_paths, *, logit_processor):
             "no_repeat_ngram_size": args.no_repeat_ngram_size, "ngram_window": RECIPES["page_pool"]["ngram_window"],
             "page_concurrency": args.page_concurrency, "request_completed": True,
             "page_count": len(ordered), "input_page_count": len(ordered),
-            "quality_warnings": warnings, "output_scope": "document_and_pages",
+            "warnings": warnings, "output_scope": "document_and_pages",
             "page_boundary_source": "input_pdf", "render_seconds": "included_in_doc_total",
             "page_inference_seconds_sum": "N/A", "doc_total_seconds": round(time.perf_counter() - started, 6),
             "document_markdown_path": "document.md", "pages": records,
