@@ -55,6 +55,9 @@
 - 失败耗时保留，默认失败 trial 不参与选优；
 - 正常 `stop`、`length`、官方重复检测终止、空文本、分页警告和图片框质量问题不是执行失败；
   上游静默跳过的布局行/区域、后处理异常和截断区域按文档计数写入 metrics `warnings`；
+- metrics 的质量 warning 统一为 `warnings: [{"page_number": 1 起页码或 null（文档级）, "reason": ..., ...}]`，
+  OpenAI SDK 传输重试按页记为 `sdk_transport_retry`（`count` 为重试次数）；
+- Markdown 保留官方生成的图片引用（可为悬空链接），正式路线不保存图片资产（暂不调参的 MinerU-Popo 仍复制图片）；
 - OOM、引擎死亡、请求中断、协议损坏、程序异常和写盘失败是真实失败；
 - 文档失败后继续处理其他文档；服务整体死亡、latency 中途停止或可选的 `--processing-timeout-seconds`
   到期时停止 trial，未到达的输入记入 `unprocessed_docs`；
@@ -127,7 +130,8 @@ Latency 逐 PDF 完成后再处理下一份，内部页面窗口保留官方默�
 服务及预处理器初始化在 ready 前完成，处理计时包含 PDF 渲染、预处理、推理、后处理和写盘，
 启动耗时单独保存；不增加文档预热。
 输出为统一 `document.md`、`pages/page_XXXX.md`、`layouts.json`、`image_boxes.json` 和
-`metrics.json`，以及 Markdown 实际引用的图片；页序和页码覆盖按输入 PDF 核对。
+`metrics.json`；Markdown 保留官方图片引用（页面文件为官方 `../images/`，`document.md` 为 `images/`），
+不保存图片资产；页序和页码覆盖按输入 PDF 核对。
 官方默认过滤页眉页脚，因此仅含页眉页脚的页面可能输出空 Markdown，不能据此判为漏页。
 
 ### 区域识别与供给边界

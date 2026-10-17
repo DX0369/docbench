@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -24,6 +25,8 @@ class Repository:
     update_ref: str
     revision: str
     release: str | None = None
+    version_file: str | None = None
+    source_version: str | None = None
 
 
 def run_git(args: Sequence[str], *, cwd: Path | None = None, check: bool = True) -> str:
@@ -56,7 +59,11 @@ def load_repositories(path: Path) -> list[Repository]:
             update_ref=raw.get("update_ref", raw["ref"]),
             revision=raw["revision"],
             release=raw.get("release"),
+            version_file=raw.get("version_file"),
+            source_version=raw.get("source_version"),
         )
+        if repository.version_file is not None and repository.release is None:
+            raise ValueError(f"{repository.id}: version_file requires release")
         if repository.id in seen_ids:
             raise ValueError(f"Duplicate repository id: {repository.id}")
         if repository.path in seen_paths:
@@ -82,70 +89,35 @@ def select(repositories: list[Repository], ids: list[str] | None) -> list[Reposi
     return selected
 
 
-def repository_state(repository: Repository) -> tuple[str, str, str]:
-    if not repository.path.exists():
-        return "missing", "-", "-"
-    if not (repository.path / ".git").is_dir():
-        return "not-git", "-", "-"
-    head = run_git(["rev-parse", "HEAD"], cwd=repository.path)
-    dirty = run_git(["status", "--porcelain"], cwd=repository.path)
-    state = "locked" if head == repository.revision else "different"
-    return state, head, "yes" if dirty else "no"
+VERSION_PATTERN = re.compile(r"""^__version__\s*=\s*["']([^"']+)["']""", re.MULTILINE)
+
+
+def snapshot_state(repository: Repository) -> tuple[str, str]:
+    """Third-party sources are plain snapshots (no .git): check presence and recorded version metadata."""
+    if not repository.path.is_dir() or not any(repository.path.iterdir()):
+        return "missing", "-"
+    if repository.version_file is None:
+        return "present", "-"
+    version_path = repository.path / repository.version_file
+    match = VERSION_PATTERN.search(version_path.read_text(encoding="utf-8")) if version_path.is_file() else None
+    if match is None:
+        return "version-unreadable", "-"
+    # source_version records a known release/version-file difference; otherwise they must match.
+    expected = repository.source_version or repository.release
+    return ("version-ok" if match.group(1) == expected else "version-mismatch"), match.group(1)
 
 
 def print_status(repositories: list[Repository]) -> int:
-    print("id\tstate\tdirty\thead\tlocked revision\tpath")
+    print("id\tstate\tsnapshot version\trelease\tlocked revision\tpath")
     failed = False
     for repository in repositories:
-        state, head, dirty = repository_state(repository)
-        failed |= state != "locked" or dirty == "yes"
+        state, version = snapshot_state(repository)
+        failed |= state not in {"present", "version-ok"}
         print(
-            f"{repository.id}\t{state}\t{dirty}\t{head}\t"
+            f"{repository.id}\t{state}\t{version}\t{repository.release or '-'}\t"
             f"{repository.revision}\t{repository.path.relative_to(PROJECT_ROOT)}"
         )
     return 1 if failed else 0
-
-
-def sync_one(repository: Repository) -> None:
-    if repository.path.exists() and not (repository.path / ".git").is_dir():
-        raise RuntimeError(
-            f"Refusing to replace non-Git path {repository.path}. Move the archived "
-            "snapshot aside or use a clean third_party/methods directory."
-        )
-    newly_cloned = not repository.path.exists()
-    if newly_cloned:
-        repository.path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            run_git(
-                [
-                    "clone",
-                    "--filter=blob:none",
-                    "--no-checkout",
-                    repository.url,
-                    str(repository.path),
-                ]
-            )
-        except RuntimeError:
-            # Git normally removes failed clone targets; remove an empty shell so
-            # the next sync is not mistaken for an archived non-Git snapshot.
-            if repository.path.is_dir() and not any(repository.path.iterdir()):
-                repository.path.rmdir()
-            raise
-
-    if not newly_cloned:
-        dirty = run_git(["status", "--porcelain"], cwd=repository.path)
-        if dirty:
-            raise RuntimeError(f"Refusing to sync dirty repository: {repository.path}")
-
-    origin = run_git(["remote", "get-url", "origin"], cwd=repository.path)
-    if origin != repository.url:
-        raise RuntimeError(f"{repository.id}: origin is {origin}, expected {repository.url}")
-    run_git(["fetch", "--prune", "origin", repository.ref], cwd=repository.path)
-    run_git(["checkout", "--detach", repository.revision], cwd=repository.path)
-    actual = run_git(["rev-parse", "HEAD"], cwd=repository.path)
-    if actual != repository.revision:
-        raise RuntimeError(f"{repository.id}: checkout verification failed")
-    print(f"[locked] {repository.id} {actual}")
 
 
 def check_upstream(repositories: list[Repository]) -> int:
@@ -170,7 +142,7 @@ def check_upstream(repositories: list[Repository]) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Synchronize method repositories to reviewed immutable revisions."
+        description="Check third-party source snapshots against the method catalog metadata."
     )
     parser.add_argument("--config-file", type=Path, default=METHOD_CATALOG_PATH)
     parser.add_argument(
@@ -178,8 +150,7 @@ def parse_args() -> argparse.Namespace:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("validate", help="Validate the unified method catalog without touching repositories.")
-    subparsers.add_parser("status", help="Compare local repositories with locked revisions.")
-    subparsers.add_parser("sync", help="Clone/fetch and detach at locked revisions.")
+    subparsers.add_parser("status", help="Check snapshot presence and recorded version metadata.")
     subparsers.add_parser(
         "check-upstream", help="Read remote refs and report updates without changing the lock."
     )
@@ -194,10 +165,6 @@ def main() -> int:
         return 0
     if args.command == "status":
         return print_status(repositories)
-    if args.command == "sync":
-        for repository in repositories:
-            sync_one(repository)
-        return 0
     if args.command == "check-upstream":
         return check_upstream(repositories)
     raise AssertionError(args.command)

@@ -10,7 +10,7 @@ src/
 ├── execution/             # 共享任务表、进程、队列、worker 和资源采样
 ├── config/                # 方法清单读取、execution profile、pressure、输入清单
 ├── validation/            # 迁移前资产、就绪和输出检查 CLI
-├── method_repositories.py # 第三方仓库同步与 revision 核对
+├── method_repositories.py # 第三方源码快照与版本元数据核对
 ├── method_paths.py        # 第三方源码目录解析
 ├── paths.py               # 公共资产路径
 ├── common.py              # PDF 列表、输出路径和通用输出工具

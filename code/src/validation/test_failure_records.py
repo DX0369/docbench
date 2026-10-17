@@ -75,7 +75,7 @@ class FailureRecordTests(unittest.TestCase):
     def test_deepseek_skip_repeat_empties_page_without_eos(self):
         args = argparse.Namespace(
             input_root=self.tmp, output_root=self.tmp / "out", server_url="http://x", model_name="m",
-            dpi=200, max_tokens=8192, temperature=0.0, top_p=1.0, seed=0, page_concurrency=1,
+            dpi=200, max_tokens=8192, temperature=0.0, top_p=1.0, seed=0, page_concurrency=1, render_workers=1,
         )
         pdf = self.tmp / "doc.pdf"
         page = {"page_seconds": 1.0, "page_size": [100, 100], "render_seconds": 0.1}
@@ -133,6 +133,108 @@ class FailureRecordTests(unittest.TestCase):
                                   skip_existing=True, request_mode="page_pool")
         with self.assertRaises(ValueError):
             unlimited.should_skip(args, self.tmp / "doc.pdf")
+
+    def test_unlimited_refuses_to_overwrite_completed_output(self):
+        from methods.unlimited_ocr import client as unlimited
+        output = self.tmp / "out" / "doc"
+        output.mkdir(parents=True)
+        for name in ("document.md", "image_boxes.json", "metrics.json"):
+            (output / name).write_text("x" if name.endswith(".md") else "{}", encoding="utf-8")
+        args = argparse.Namespace(input_root=self.tmp, output_root=self.tmp / "out",
+                                  skip_existing=False, request_mode="joint")
+        with self.assertRaises(FileExistsError):
+            unlimited.should_skip(args, self.tmp / "doc.pdf")
+
+    def test_sdk_transport_retries_are_counted(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from image_vllm_client import build_openai_client, count_http_attempts, sdk_retry_warning
+        calls = []
+        body = json.dumps({"id": "x", "object": "chat.completion", "created": 0, "model": "m", "choices": [
+            {"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}]}).encode()
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                calls.append(1)
+                status = 503 if len(calls) <= 2 else 200
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        client = build_openai_client(f"http://127.0.0.1:{server.server_port}/v1", 10)
+        with count_http_attempts() as attempts:
+            client.chat.completions.create(model="m", messages=[{"role": "user", "content": "x"}])
+        self.assertEqual(attempts[0], 3)
+        self.assertEqual(sdk_retry_warning(4, attempts[0]),
+                         [{"page_number": 4, "reason": "sdk_transport_retry", "count": 2}])
+        self.assertEqual(sdk_retry_warning(4, 1), [])
+
+    def test_monkey_region_failures_become_attributable_placeholders(self):
+        import asyncio
+        from methods.monkeyocr.async_runtime import AsyncRecognitionLoop
+
+        class Chat:
+            async def async_batch_inference(self, images, questions):
+                return ["ok", ValueError("bad region")]
+
+        loop = AsyncRecognitionLoop(Chat())
+        self.addCleanup(loop.loop.close)
+        out = loop.batch_inference(["a", "b"], ["q", "q"])
+        self.assertEqual(out[0], "ok")
+        self.assertEqual(loop.region_failures, ["ValueError: bad region"])
+        from methods.monkeyocr.pipeline import failed_region_ids
+        self.assertEqual(failed_region_ids([{"text": "x"}, {"res": [{"text": out[1]}]}]), {0})
+
+        class DeadChat:
+            async def async_batch_inference(self, images, questions):
+                exc = RuntimeError("engine gone")
+                exc.gdb_runtime_unusable = True
+                return [exc]
+
+        dead = AsyncRecognitionLoop(DeadChat())
+        self.addCleanup(dead.loop.close)
+        with self.assertRaises(RuntimeError):
+            dead.batch_inference(["a"], ["q"])
+
+    def test_mineru_identity_requires_profile_environment(self):
+        import types
+        from unittest.mock import patch
+        from methods.mineru.output import mineru_identity
+        version = types.ModuleType("mineru.version")
+        version.__version__ = "3.4.3"
+        modules = patch.dict(sys.modules, {"mineru": types.ModuleType("mineru"), "mineru.version": version})
+        modules.start()
+        self.addCleanup(modules.stop)
+        env = {"GDB_METHOD_ID": "mineru_344_2605", "GDB_MINERU_VERSION": "3.4.4",
+               "GDB_MINERU_SOURCE_REVISION": "0" * 40, "GDB_MINERU_CHECKPOINT": "ckpt"}
+        with patch.dict("os.environ", env):
+            self.assertEqual(mineru_identity()["release_version"], "3.4.4")
+        for missing in env:
+            with patch.dict("os.environ", {k: v for k, v in env.items() if k != missing}, clear=True):
+                with self.assertRaises(KeyError):
+                    mineru_identity()
+
+    def test_snapshot_version_metadata(self):
+        from method_repositories import Repository, snapshot_state
+        root = self.tmp / "repo"
+        (root / "pkg").mkdir(parents=True)
+        (root / "pkg/version.py").write_text('__version__ = "3.4.3"\n', encoding="utf-8")
+        repo = Repository(id="r", path=root, url="u", ref="r", update_ref="r", revision="0" * 40,
+                          release="3.4.4", version_file="pkg/version.py")
+        self.assertEqual(snapshot_state(repo), ("version-mismatch", "3.4.3"))
+        self.assertEqual(snapshot_state(Repository(**{**repo.__dict__, "source_version": "3.4.3"})),
+                         ("version-ok", "3.4.3"))
+        self.assertEqual(snapshot_state(Repository(**{**repo.__dict__, "path": self.tmp / "none"}))[0], "missing")
 
 
 if __name__ == "__main__":

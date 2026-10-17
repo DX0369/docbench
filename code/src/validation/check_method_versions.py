@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from execution.tasks import NATIVE_TASKS, SERVICE_TASKS as VLLM_TASKS  # noqa: E402
 from config.method_versions import METHOD_CATALOG_PATH, load_method_catalog, load_method_versions  # noqa: E402
+from method_repositories import load_repositories, snapshot_state  # noqa: E402
 from paths import CONDA_ENV_ROOT, PROJECT_ROOT  # noqa: E402
 
 
@@ -24,17 +24,6 @@ class AuditResult:
     category: str
     status: str
     detail: str
-
-
-def run_git(repo_path: Path, *args: str) -> tuple[int, str]:
-    completed = subprocess.run(
-        ["git", "-C", str(repo_path), *args],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
-    return completed.returncode, completed.stdout.strip()
 
 
 def add_result(
@@ -51,6 +40,7 @@ def audit() -> list[AuditResult]:
     versions = load_method_versions()
     lock_payload = load_method_catalog()
     repositories = {item["id"]: item for item in lock_payload["repositories"]}
+    snapshots = {item.id: item for item in load_repositories(METHOD_CATALOG_PATH)}
     registered_tasks = set(VLLM_TASKS) | set(NATIVE_TASKS)
     results: list[AuditResult] = []
 
@@ -92,15 +82,14 @@ def audit() -> list[AuditResult]:
             if not repo_path.is_dir():
                 add_result(results, method_id, "source", "error", f"missing {repo_path}")
             else:
-                code, head = run_git(repo_path, "rev-parse", "HEAD")
-                expected_head = version.source_revision
-                status = "ok" if code == 0 and expected_head and head == expected_head else "error"
+                # Snapshots are plain files in the root repository; revisions are catalog metadata.
+                state, snapshot_version = snapshot_state(snapshots[version.source_repository_id])
                 add_result(
                     results,
                     method_id,
-                    "source_checkout",
-                    status,
-                    f"HEAD={head or 'unavailable'} lock={expected_head}",
+                    "source_snapshot",
+                    "ok" if state in {"present", "version-ok"} else "error",
+                    f"{state} version={snapshot_version} revision={version.source_revision}",
                 )
                 if version.source_binding == "compatibility_source":
                     binding_status = "compatibility"
@@ -124,27 +113,13 @@ def audit() -> list[AuditResult]:
                     binding_detail,
                 )
                 if version.historical_source_revision:
-                    code, _ = run_git(
-                        repo_path,
-                        "cat-file",
-                        "-e",
-                        f"{version.historical_source_revision}^{{commit}}",
-                    )
                     add_result(
                         results,
                         method_id,
                         "historical_source_revision",
-                        "ok" if code == 0 else "error",
-                        version.historical_source_revision,
+                        "recorded",
+                        f"{version.historical_source_revision} (not verifiable offline without upstream history)",
                     )
-                code, dirty = run_git(repo_path, "status", "--porcelain")
-                add_result(
-                    results,
-                    method_id,
-                    "source_dirty",
-                    "warning" if code == 0 and dirty else "ok",
-                    dirty or "clean",
-                )
 
         if version.adapter_module is None:
             adapter_status = "error" if version.benchmark_status == "active" else "pending"

@@ -19,6 +19,8 @@
       "update_ref": "refs/tags/mineru-4.0.11-released",
       "revision": "f232373fb319d63e82aefd30be40a2ccc6005d73",
       "release": "4.0.11",
+      "version_file": "mineru/version.py",
+      "source_version": "4.0.10",
       "notes": "Reference release source: tag version.py reports 4.0.10; comparison with installed 4.0.11 package differs only in version.py. Runtime uses the official PyPI mineru==4.0.11 wheel, not this checkout."
     },
     {
@@ -117,7 +119,10 @@
       "update_ref": "master",
       "revision": "0dfc9460cd9ab693b9af60ae3fbffd7bc111b062",
       "archived_revision": "ff2caf3a",
-      "release": "3.4.4"
+      "release": "3.4.4",
+      "version_file": "mineru/version.py",
+      "source_version": "3.4.3",
+      "notes": "Exact mineru-3.4.4-released tag checkout; the tag's mineru/version.py reports 3.4.3. Runtime metadata keeps both the 3.4.4 release and the reported 3.4.3 runtime version."
     },
     {
       "id": "mineru_303",
@@ -128,6 +133,7 @@
       "revision": "ff2caf3a842a54b3d31979a2945003cf67858199",
       "release_tag_revision": "be675a5a97edd569761086460193e266a2479f07",
       "release": "3.0.3",
+      "version_file": "mineru/version.py",
       "notes": "Requires src/methods/mineru/patches/pdfium_image_bounds.patch for pypdfium2 5.10.1. Pinned HEAD plus a one-line image-bounds API compatibility patch; classification thresholds and inference settings are unchanged. See gdb_mineru_303 environment recipe."
     },
     {

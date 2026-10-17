@@ -28,7 +28,7 @@ WeVisDoc-2B 的 vLLM 服务和页面 worker 也复用此环境，不额外安装
 
 ## 恢复已验证环境
 
-以下用于**新的 Linux x86_64 环境和干净源码目录**，不要在现有带补丁 checkout 上重复 sync。
+以下用于**新的 Linux x86_64 环境**；源码快照随根仓库提供，已包含项目补丁。
 变量沿用[通用安装说明](README.md)，迁移前须一并复制 `env/locks_rtx3090_20260720/`；
 只克隆 `code/` 不包含这些环境快照。命令恢复包版本及源码，不保证跨平台或 wheel 字节完全相同；
 新服务器仍需核对驱动、Torch CUDA 版本并独立 smoke。本轮没有实际创建新环境验证重建流程。
@@ -50,11 +50,8 @@ GLM_PY="$(dirname "$(command -v conda)")/../envs/gdb_glmocr/bin/python"
 "$GLM_PY" -m pip install \
   --no-deps -r "$LOCK_DIR/gdb_glmocr.pip-freeze.txt"
 
-# 恢复 methods.json 锁定的源码，再应用项目异常传播补丁。
-python3 "$GDB_ROOT/code/src/method_repositories.py" --method glmocr sync
-GLM_PATCH="$GDB_ROOT/code/src/methods/glmocr/patches/failure_propagation.patch"
-git -C "$GDB_METHOD_ROOT/glmocr" apply --check "$GLM_PATCH"
-git -C "$GDB_METHOD_ROOT/glmocr" apply "$GLM_PATCH"
+# 源码快照随根仓库提供，已包含项目异常传播补丁；这里只核对快照存在。
+python3 "$GDB_ROOT/code/src/method_repositories.py" --method glmocr status
 "$GLM_PY" -m pip install --no-deps --no-build-isolation \
   -e "$GDB_METHOD_ROOT/glmocr[selfhosted]"
 )

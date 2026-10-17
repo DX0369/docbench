@@ -90,7 +90,10 @@ PYTHONNOUSERSITE=1 "$MONKEY_PY" -m pip install --no-deps --no-build-isolation \
 
 恢复锁定 HEAD `70f6e2c5583a563796d7e0ec8a319d5bcfb86219` 后，顺序应用三份现用补丁：
 
-1. `failure_propagation.patch`：只保留当前async路径的真实错误传播。
+1. `failure_propagation.patch`：只保留当前async路径的真实错误传播；默认遇到首个区域异常即抛出。
+   项目 `async_runtime.py` 打开补丁中的 `gdb_return_region_exceptions`，按下标收集区域异常并用占位符
+   标记；同组导出前定位到所属 PDF，只将该 PDF 记为 `region_recognition` 失败，其余 PDF 正常导出。
+   无法归属到 PDF 时整组失败；引擎不可用等致命错误仍立即中止。
 2. `region_concurrency.patch`：将官方固定信号量64暴露为正整数配置，不改变生成参数。
 3. `tiny_image.patch`：原max_size=1600加载后，仅短边<28像素的区域调用官方HF路线
    使用的`qwen_vl_utils.fetch_image`；两版锁定processor均为patch_size14×merge_size2。

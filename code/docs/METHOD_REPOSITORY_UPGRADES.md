@@ -7,8 +7,8 @@
 - [模型下载](MODELS.md)
 - [吞吐协议](THROUGHPUT_TUNING_PROTOCOL.md)
 
-第三方源码位于 `third_party/methods/`，每个目录保留自己的 Git 仓库。旧服务器或 A800
-源码只作为历史证据，不替换当前锁定 checkout。
+第三方源码位于 `third_party/methods/`，以普通文件纳入根仓库（除 `monkeyocrv2` 外不保留上游 `.git`）；
+上游 URL 和 revision 是 `methods.json` 中的元数据。旧服务器或 A800 源码只作为历史证据，不替换当前快照。
 
 ## 源码身份规则
 
@@ -19,25 +19,25 @@
   `historical_source_revision`，不能冒充历史源码完全复原。
 - `reference_checkout` 只表示参考源码，`model_only` 只表示模型来源，二者都不能作为运行源码。
 - 不同源码 revision 保留独立仓库条目；不同模型版本保留独立模型目录。
-- 本地兼容补丁单独记录并按环境配方应用。HEAD 锁定不代表工作树没有补丁或 dirty 文件。
+- 本地兼容补丁单独记录并按环境配方应用；快照中已应用的补丁随根仓库提交。
+- `version_file` 记录快照内的版本文件；release tag 的版本文件与 `release` 不一致时，用 `source_version` 显式记录快照实际报告的版本。
 - `active` 只表示入口已登记；`validation_status` 必须反映实际验证层级，模型存在不等于 GPU smoke 通过。
 - 含糊的历史 runnable ID 只能读取历史结果，不能用于新实验调度。
 
 ## 同步与审计
 
-以下命令从 `code/` 目录执行，只需要 Python 3.10+ 和 Git：
+以下命令从 `code/` 目录执行：
 
 ```bash
 python src/method_repositories.py validate
 python src/method_repositories.py status
-python src/method_repositories.py sync
 ```
 
 含义如下：
 
 - `validate`：离线检查清单、仓库引用和字段一致性；
-- `status`：核对本地仓库 HEAD、origin 和工作树状态；
-- `sync`：clone/fetch 后 checkout 清单中的精确 commit，遇到 dirty 或非预期仓库会拒绝操作。
+- `status`：核对快照目录存在且非空；登记了 `version_file` 的仓库还会比对快照版本与
+  `source_version`（未登记时与 `release`）是否一致。快照没有上游 `.git`，revision 只能作为元数据记录。
 
 需要查看上游是否出现新 revision 时，再执行：
 
@@ -45,12 +45,14 @@ python src/method_repositories.py sync
 python src/method_repositories.py check-upstream
 ```
 
-该命令只读取远程 refs，不修改清单或 checkout。指定仓库时，`--method` 使用
+该命令只读取远程 refs，不修改清单或快照。指定仓库时，`--method` 使用
 `repositories` 中的仓库 ID，而不是 benchmark runnable ID：
 
 ```bash
-python src/method_repositories.py --method mineru sync
+python src/method_repositories.py --method mineru status
 ```
+
+升级源码时，在新 revision 下取得上游文件替换对应快照目录，重新应用本项目补丁后与清单修改一起提交。
 
 完整绑定审计：
 
@@ -59,7 +61,7 @@ python src/validation/check_method_versions.py \
   --json-report ../tmp/runtime/method_version_audit.json
 ```
 
-它核对方法 ID、模型、源码 HEAD、兼容源码历史 revision、adapter、环境和 active 注册。
+它核对方法 ID、模型、源码快照与版本元数据、兼容源码的历史 revision 记录、adapter、环境和 active 注册。
 审计通过不代表模型推理成功；实际推理应使用 `RUN_COMMANDS.md` 中的正式入口，
 遵循吞吐协议，并将进展与简要结论记录在 `PROJECT_STATE.md`。
 
@@ -75,7 +77,7 @@ python src/validation/check_method_versions.py \
 6. 更新验证状态和必要的 adapter/config；
 7. 提交源码映射、代码修改和验证说明，不把一个版本的质量与另一个版本的吞吐混在一起。
 
-源码同步本身不证明兼容，也不自动应用本项目补丁。环境配方维护必要补丁和安装要求，
+替换源码快照本身不证明兼容，也不自动应用本项目补丁。环境配方维护必要补丁和安装要求，
 实验进展、smoke 结果与已知限制统一维护于 [PROJECT_STATE.md](../../PROJECT_STATE.md)。
 
 ## 必须保留的版本例外
