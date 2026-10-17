@@ -45,18 +45,21 @@
 ### 计时和成功判定
 
 三个时间点为：`t0` 启动服务/runtime，`t1` 全部必要组件 ready 并放行输入，`t2` 输出、错误记录和写盘完成。
-记录 `startup_seconds=t1-t0`、`processing_seconds=t2-t1`、`total_seconds=t2-t0`。
+记录 `startup_seconds=t1-t0`、`processing_seconds=t2-t1`、`total_wall_seconds=t2-t0`。
 
-主吞吐为 `successful_input_pages / processing_seconds`，总墙钟吞吐为
-`successful_input_pages / total_seconds`。处理时间包含读取、渲染、预处理、推理、后处理、导出和失败尝试，
+主吞吐为 `processing_pages_per_second = successful_page_count / processing_seconds`，总墙钟吞吐为
+`pages_per_second = successful_page_count / total_wall_seconds`。处理时间包含读取、渲染、预处理、推理、后处理、导出和失败尝试，
 不包含退出清理，也不额外加入预热 PDF；首次 kernel/JIT/缓存开销仍计入。
 
-- 成功页数来自成功输入 PDF；失败或未处理文档的页数不进入分母；
+- 成功页数来自成功输入 PDF 的 pdfinfo 页数；失败或未处理文档的页数不计入分子，其耗时仍在分母中；
 - 失败耗时保留，默认失败 trial 不参与选优；
-- 正常 `stop`、`length`、空文本、分页警告和图片框质量问题不是执行失败；
+- 正常 `stop`、`length`、官方重复检测终止、空文本、分页警告和图片框质量问题不是执行失败；
+  上游静默跳过的布局行/区域、后处理异常和截断区域按文档计数写入 metrics `warnings`；
 - OOM、引擎死亡、请求中断、协议损坏、程序异常和写盘失败是真实失败；
-- 文档失败后继续处理其他文档；服务整体死亡时停止 trial 并保留未处理清单；
-- 不自动重试、不切换 backend、不用内容质量判断吞吐成功，质量问题作为 warning 记录。
+- 文档失败后继续处理其他文档；服务整体死亡、latency 中途停止或可选的 `--processing-timeout-seconds`
+  到期时停止 trial，未到达的输入记入 `unprocessed_docs`；
+- 不额外添加文档重跑、不切换 backend、不用内容质量判断吞吐成功，质量问题作为 warning 记录；
+  官方客户端/SDK 的默认传输重试保持不变并计入处理时间。
 
 ### 目录和记录
 
@@ -90,6 +93,9 @@ P 不要求在所有方法中同名，只要求映射明确、可复现，并且
 | Qianfan 普通/think | 官方单页请求 + 共享 page pool | 页面在途数 | 可跨文档供给，按 PDF 页序导出 |
 | Unlimited `page_pool` | SGLang 页面请求 | 页面在途数 | 可跨文档供给 |
 | Unlimited `joint` | SGLang 整篇请求 | 文档客户端数 | 文档级联合上下文 |
+
+Unlimited 两条路线使用官方 README 的不同配方：`joint` 为 "Multi page parsing."、`base`、ngram window 1024；
+`page_pool` 每次一张图，使用官方单图配方 "document parsing."、`gundam`、ngram window 128。
 | MonkeyOCR 3B/1.2B | 常驻 vLLM async runtime | 分组内区域识别并发上限 | 同组可跨 PDF，分组顺序处理 |
 | MonkeyOCRv2 B-Parsing AR | 官方常驻 ServicePipelinePool + vLLM 服务 | 共享页面在途上限 | 多文档供给同一 pool，按原 PDF 导出 |
 | PaddleOCR-VL 1.5/1.6 | 队列 pipeline + 异步 HTTP 区域 VLM 服务 | 区域识别并发上限 | 多 PDF 页面进入官方 pipeline，可跨文档供给 |
@@ -244,8 +250,8 @@ SDK 默认传输重试计入处理时间，不追加文档重跑。
 
 ### Latency 参数口径
 
-Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan、LightOnOCR-2、Xiaomi-OCR-0 和
-Unlimited `page_pool` 使用页面级 `P=1`；其他方法只
+Latency 不复用吞吐压力映射。HunyuanOCR、DeepSeek-OCR-2、Qianfan、LightOnOCR-2、Xiaomi-OCR-0、
+Jina-OCR-v1、WeVisDoc-2B 和 Unlimited `page_pool` 使用页面级 `P=1`；其他方法只
 固定一个外层文档客户端。旧 Monkey 使用官方区域并发 64，MonkeyOCRv2 使用官方页面窗口 64，TeleOCR 使用 async 默认 100，
 Youtu 使用 query batch 5；Paddle 不显式传 `vl_rec_max_concurrency`，GLM 不显式传
 `max_workers`（锁定 YAML 的 32），PP 使用基础 `batch_scale=1`，Marker 使用一个

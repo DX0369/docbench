@@ -171,6 +171,33 @@ hf download SeerRay-Lab/Xiaomi-OCR-0 \
 模型架构为 `Qwen3_5ForConditionalGeneration`。服务和 worker 复用 `gdb_glmocr`；
 参数与安装边界见 `environments/gdb_xiaomi_ocr.md`；GPU 6 两文档 P1/P2 与 latency smoke 已通过，未进行正式调参。
 
+### WeVisDoc-2B
+
+使用官方 `Tencent/WeVisDoc-2B` checkpoint；现机快照的 Hugging Face 下载元数据记录 revision
+`86ecb7330566296b695d4f91aea807a260cc84a7`。
+
+```bash
+hf download Tencent/WeVisDoc-2B \
+  --repo-type model \
+  --local-dir "$GDB_MODEL_ROOT/WeVisDoc-2B"
+```
+
+只登记官方 vLLM 单页路线；服务和 worker 复用 `gdb_glmocr`，参数与 eager 兼容设置见
+`environments/gdb_wevisdoc.md`。
+
+### MonkeyOCRv2
+
+当前正式路线只使用 `zenosai/MonkeyOCRv2-B-Parsing`（普通 AR）；DFlash 路线已于 2026-10-17 放弃，
+S-Parsing 未接入。现机目录未保留 Hugging Face 下载元数据，重新下载同名仓库不保证与原快照一致。
+
+```bash
+hf download zenosai/MonkeyOCRv2-B-Parsing \
+  --repo-type model \
+  --local-dir "$GDB_MODEL_ROOT/monkeyocrv2/MonkeyOCRv2-B-Parsing"
+```
+
+环境与运行边界见 `environments/gdb_monkeyocrv2.md`。
+
 ### PaddleOCR-VL 1.5 与 1.6
 
 ```bash

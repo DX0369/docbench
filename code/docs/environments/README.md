@@ -151,6 +151,7 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 | `gdb_deepseek_ocr2` | DeepSeek-OCR-2 | 3.12.9 | Torch 2.6.0+cu124；vLLM 0.8.5；Transformers 4.46.3 | 官方核心版本＋项目cu124组合；保留两项已记录冲突 |
 | `gdb_qianfan` | Qianfan OCR / think | 3.10 | Torch 2.10.0 cu128；Transformers 4.57.6；vLLM 0.18.1 | 官方未锁版本；项目已验证版本 |
 | `gdb_teleocr` | TeleOCR vllm-async-engine | 3.10 | Torch 2.8.0；Transformers 4.57.1；vLLM 0.11.0；xformers 0.0.32 | 官方 requirements/插件；排除可选 Gradio UI 冲突依赖 |
+| `gdb_monkeyocrv2` | MonkeyOCRv2 B-Parsing 普通 AR（DFlash 仅诊断） | 3.11.17 | Torch 2.11.0+cu129；Transformers 5.19.0；vLLM 0.25.1+cu129；FlashInfer 0.6.13 | 官方源码 + 项目已验证版本 |
 | `gdb_glmocr`（LightOnOCR-2 复用） | GLM-OCR；LightOnOCR-2-1B vLLM page pool | 3.10 | Torch 2.11.0；Transformers 5.14.1；vLLM 0.20.0；Pillow；pypdfium2 5.12.1 | LightOnOCR-2 不重复安装依赖；当前不创建独立环境 |
 | `gdb_unlimited_ocr_sglang` | Unlimited OCR 官方定制SGLang service | 3.12.13 | SGLang dev11416；Torch 2.9.1 cu128；Transformers 5.3.0；FlashInfer 0.6.7.post3 | 官方定制 wheel＋项目 SM86 兼容补丁 |
 
@@ -173,6 +174,7 @@ runtime 及 ABI 的兼容性，不能因为本机有 CUDA 12.8 就直接编译�
 - [gdb_deepseek_ocr2.md](gdb_deepseek_ocr2.md)
 - [gdb_qianfan.md](gdb_qianfan.md)
 - [gdb_teleocr.md](gdb_teleocr.md)
+- [gdb_monkeyocrv2.md](gdb_monkeyocrv2.md)
 - [gdb_lightonocr2.md](gdb_lightonocr2.md)：说明 LightOnOCR-2 如何复用 `gdb_glmocr`，不重复安装依赖。
 - [gdb_xiaomi_ocr.md](gdb_xiaomi_ocr.md)：Xiaomi-OCR-0 服务和 worker 复用 `gdb_glmocr`；依赖来源、恢复链接与迁移检查。
 - [gdb_wevisdoc.md](gdb_wevisdoc.md)：WeVisDoc-2B 复用 `gdb_glmocr`，仅 vLLM 路线；官方依赖与 eager 兼容设置。

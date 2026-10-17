@@ -1,6 +1,6 @@
 # 项目说明
 
-更新时间：2026-10-09 16:42 +08:00
+更新时间：2026-10-17 15:58 +08:00
 
 ## 研究目标与范围
 
@@ -9,7 +9,7 @@ GlobalDocBench 用统一的多页 PDF 输入，比较文档解析方法的准确
 - 准确率路线尽量保持官方模型、prompt、图像处理、生成参数和后处理。
 - 吞吐路线只在不改变输出语义的前提下，使用官方支持且适合方法特性的 backend、batch、并发和队列机制。
 - 吞吐调参是有界工程搜索，不把一次小规模实验描述为理论最优。
-- 当前方法族包括 HunyuanOCR、Qianfan-OCR、DeepSeek-OCR-2、PaddleOCR-VL、GLM-OCR、MonkeyOCR、MinerU、Youtu、Marker、PP-StructureV3、Unlimited-OCR、TeleOCR、LightOnOCR-2、Xiaomi-OCR-0，以及 MinerU-Popo 组合。
+- 当前方法族包括 HunyuanOCR、Qianfan-OCR、DeepSeek-OCR-2、PaddleOCR-VL、GLM-OCR、MonkeyOCR、MonkeyOCRv2、MinerU（3.x 与 4.0.11）、Youtu、Marker、PP-StructureV3、Unlimited-OCR、TeleOCR、LightOnOCR-2、Xiaomi-OCR-0、Jina-OCR-v1、WeVisDoc-2B，以及 MinerU-Popo 组合。
 - 正式比较按单张 RTX 3090 执行，不将多卡总吞吐与单卡结果混排。
 
 ## 顶层目录
@@ -43,7 +43,7 @@ GlobalDocBench 用统一的多页 PDF 输入，比较文档解析方法的准确
 - `code/config/methods.json`：方法版本与第三方源码的统一清单，记录正式 method ID、模型、环境、adapter，以及仓库 URL、本地目录和精确 revision。
 - `code/src/config/execution_profiles.py`：正式执行路线及运行参数登记。
 - `code/config/throughput_manifests/`：固定输入 PDF 清单及其选择说明。
-- `code/config/throughput_profiles/`：已经选定的吞吐运行参数。
+- `code/config/throughput_profiles/`：显式保存的吞吐运行参数；现有 `rtx3090.json` 中 Unlimited joint P4 和 Marker P4 没有可追溯的调参产物，不视为定版。
 - `env/`：环境锁和迁移快照。
 - `experiments/tuning/`、`experiments/benchmark/`：按 run_id 隔离的运行产物。
 

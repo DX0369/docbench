@@ -1,4 +1,3 @@
-WARNING: The directory '/data/wangsq/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
 accelerate==1.14.0
 aiofiles==25.1.0
 aiohappyeyeballs==2.7.1

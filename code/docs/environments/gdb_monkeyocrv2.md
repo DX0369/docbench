@@ -4,7 +4,7 @@
 
 ## 用途与版本依据
 
-用于 `monkeyocrv2_b_parsing` 的普通 AR 推理；当前不接入 DFlash。
+用于 `monkeyocrv2_b_parsing` 的普通 AR 推理；DFlash 路线已放弃，不接入。
 源码和模型绑定以 `code/config/methods.json` 为准，安装依据为锁定源码的
 `README.md` 中 Document Parsing / Install 和 `parsing/requirements.txt`。
 
@@ -60,7 +60,10 @@ print("flashinfer:", flashinfer.__version__)
 PY
 ```
 
-当前尚未保存本环境的 Conda explicit、Conda env 和 pip freeze 迁移锁。
+迁移锁（2026-10-17 15:42 +08:00 导出）：
+[explicit](../../../env/locks_rtx3090_20260720/gdb_monkeyocrv2.explicit.txt)、
+[full.no-builds](../../../env/locks_rtx3090_20260720/gdb_monkeyocrv2.full.no-builds.yml)、
+[pip freeze](../../../env/locks_rtx3090_20260720/gdb_monkeyocrv2.pip-freeze.txt)。
 新服务器还需核查驱动、CUDA 编译工具及真实 GPU smoke，不能仅凭 import 成功认定复现完成。
 现机使用 CUDA 12.8 toolkit 提供编译工具，与 Torch wheel 的 CUDA 12.9 运行时是不同概念，
 不据此改写官方 CUDA 要求。
