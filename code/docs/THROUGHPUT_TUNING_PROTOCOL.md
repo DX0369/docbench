@@ -57,7 +57,7 @@
   上游静默跳过的布局行/区域、后处理异常和截断区域按文档计数写入 metrics `warnings`；
 - metrics 的质量 warning 统一为 `warnings: [{"page_number": 1 起页码或 null（文档级）, "reason": ..., ...}]`，
   OpenAI SDK 传输重试按页记为 `sdk_transport_retry`（`count` 为重试次数）；
-- Markdown 保留官方生成的图片引用（可为悬空链接），正式路线不保存图片资产（暂不调参的 MinerU-Popo 仍复制图片）；
+- Markdown 保留官方生成的图片引用（可为悬空链接），所有方法都不保存图片资产；
 - OOM、引擎死亡、请求中断、协议损坏、程序异常和写盘失败是真实失败；
 - 文档失败后继续处理其他文档；服务整体死亡、latency 中途停止或可选的 `--processing-timeout-seconds`
   到期时停止 trial，未到达的输入记入 `unprocessed_docs`；

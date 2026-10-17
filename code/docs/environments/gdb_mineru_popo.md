@@ -76,11 +76,11 @@ assert transformers.__version__ == '5.14.1'
 PY
 
 cd "$GDB_ROOT"
-REPO="$GDB_ROOT/third_party/methods/MinerU-Popo"
 PATCHES="$GDB_ROOT/code/src/methods/mineru_popo/patches"
-# 仅对尚未应用修复的锁定源码执行；已有环境用 --reverse --check 检查即可。
-git -C "$REPO" apply --check "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
-git -C "$REPO" apply "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
+# 根仓库中的源码快照已包含这些修复；只做反向检查。
+# 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
+git -C "$GDB_ROOT" apply --directory=third_party/methods/MinerU-Popo --reverse --check \
+  "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
 测试源已在定版前验证后删除。迁移时使用 [运行命令](../RUN_COMMANDS.md) 中的 Popo
 组合入口，并用 `validate_outputs.py` 检查生成的输出目录。
 ```

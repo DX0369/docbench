@@ -8,7 +8,6 @@ from __future__ import annotations
 from importlib import import_module
 import os
 from pathlib import Path
-import subprocess
 from typing import Any
 
 
@@ -17,9 +16,6 @@ API_PRELOAD_BACKENDS = {
     "mineru_344_2605": ("hybrid-engine",),
 }
 _VERSIONS = {"mineru_303_2509": "3.0.3", "mineru_344_2605": "3.4.4"}
-# This released Git tag retains the preceding version.py string. Accept only
-# the pinned checkout, never an arbitrary installed package with that version.
-_SOURCE_VERSIONS = {"mineru_344_2605": "3.4.3"}
 
 
 def supports_api_preload(method_id: str, backend: str) -> bool:
@@ -49,17 +45,16 @@ def preload_hybrid_models(
     version_module = import_module("mineru.version")
     actual_version = version_module.__version__
     if actual_version != _VERSIONS[method_id]:
-        from config.method_versions import get_method_version
+        # A release tag may retain the preceding version.py string. Accept it only when it is
+        # imported from the pinned snapshot and the catalog records that snapshot version.
+        from method_repositories import repository_at, snapshot_state
         from methods.mineru.versions import PROFILES
-        profile = PROFILES[method_id]
-        expected_file = profile.repository_path / "mineru/version.py"
+        repository = repository_at(PROFILES[method_id].repository_path)
         source_file = getattr(version_module, "__file__", None)
-        pinned_source = (actual_version == _SOURCE_VERSIONS.get(method_id) and source_file is not None
-                         and Path(source_file).resolve() == expected_file.resolve())
-        if pinned_source:
-            revision = subprocess.check_output(
-                ["git", "-C", str(profile.repository_path), "rev-parse", "HEAD"], text=True).strip()
-            pinned_source = revision == get_method_version(method_id).source_revision
+        state, snapshot_version = snapshot_state(repository)
+        pinned_source = (repository.source_version is not None and state == "version-ok"
+                         and actual_version == snapshot_version and source_file is not None
+                         and Path(source_file).resolve() == (repository.path / repository.version_file).resolve())
         if not pinned_source:
             raise ValueError(f"MinerU preload requires {_VERSIONS[method_id]} or its exact pinned source, got {actual_version}")
     prepare_preload_environment(table_enable=table_enable)

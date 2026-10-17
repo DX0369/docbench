@@ -21,7 +21,7 @@ VLM服务单独使用[gdb_paddle_vllm](gdb_paddle_vllm.md)；不合并两个CUDA
 不要仅按YAML中的PaddleOCR版本号从PyPI安装。
 
 ```bash
-git -C "$GDB_METHOD_ROOT/paddleocr" rev-parse HEAD
+python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
 
 (
   unset PYTHONPATH PYTHONHOME PIP_EXTRA_INDEX_URL PIP_TARGET PIP_PREFIX PIP_USER

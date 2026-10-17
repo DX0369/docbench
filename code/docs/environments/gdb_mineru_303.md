@@ -73,18 +73,15 @@ conda create -n gdb_mineru_303 python=3.10 pip setuptools wheel uv -y
 left/bottom/right/top；未改变面积算法、分类阈值、异常策略、模型或生成参数。
 补丁只用于 `mineru_303` 锁定HEAD，**不应用到新版MinerU**，也不改用legacy或强制txt。
 
-迁移恢复源码及环境后，显式应用并检查（若已应用，只运行最后的反向检查）：
+根仓库中的源码快照已包含该补丁；迁移后只做反向检查：
 
 ```bash
-git -C "$MINERU_303_SRC" apply --check \
-  "$GDB_ROOT/code/src/methods/mineru/patches/pdfium_image_bounds.patch"
-git -C "$MINERU_303_SRC" apply \
-  "$GDB_ROOT/code/src/methods/mineru/patches/pdfium_image_bounds.patch"
-git -C "$MINERU_303_SRC" apply --reverse --check \
+# 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
+git -C "$GDB_ROOT" apply --directory=third_party/methods/mineru_303 --reverse --check \
   "$GDB_ROOT/code/src/methods/mineru/patches/pdfium_image_bounds.patch"
 ```
 
-如需恢复未补丁源码，使用同一patch的 `git apply --reverse`，不要删除记录或覆盖其他修改。
+如需恢复未补丁源码，用同样的 `--directory` 执行 `git apply --reverse`，不要删除记录或覆盖其他修改。
 实际环境包和三份锁未变，安装命令中的pypdfium2精确版本来自现有锁；HEAD不编码本地补丁。
 只恢复环境锁和HEAD、不应用补丁，仍会复现原错误。
 

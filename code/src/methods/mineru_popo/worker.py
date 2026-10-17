@@ -21,7 +21,8 @@ from config.method_versions import get_method_version
 from execution.processes import assert_service_port_available, run_command, terminate_process, wait_for_http_or_process_exit
 from execution.queue import collect_done_statuses, collect_failed_docs, collect_unprocessed_docs, write_pending_job_list
 from execution.workers import write_timing_state, start_queue_processing, queue_processing_seconds
-from method_paths import method_repo_path
+from method_paths import check_patches_applied, method_repo_path
+from method_repositories import repository_at, snapshot_state
 from methods.mineru.versions.v344_2605 import PROFILE
 from methods.mineru_popo.commands import add_arguments, validate_options
 from paths import CONDA_ENV_ROOT, SRC_ROOT, TMP_ROOT
@@ -31,15 +32,14 @@ EXECUTION_PROFILE = METHOD + "_vllm_services"
 
 
 def preflight(args):
-    for repo, revision in ((PROFILE.repository_path, PROFILE.source_revision),
-                           (method_repo_path("mineru_popo"), get_method_version(METHOD).source_revision)):
-        actual = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
-        if actual != revision:
-            raise ValueError(f"Source revision mismatch: {repo}: {actual} != {revision}")
+    # Snapshots have no .git: revisions are catalog metadata, so check presence and version files.
+    for repo in (PROFILE.repository_path, method_repo_path("mineru_popo")):
+        state, _ = snapshot_state(repository_at(repo))
+        if state not in {"present", "version-ok"}:
+            raise ValueError(f"Source snapshot check failed: {repo}: {state}")
     patches = Path(__file__).resolve().parent / "patches"
-    subprocess.run(["git", "-C", str(method_repo_path("mineru_popo")), "apply", "--reverse", "--check",
-                    *(str(patches / name) for name in
-                      ("same_page.patch", "pr12.patch", "pr15.patch", "failure_propagation.patch"))], check=True)
+    check_patches_applied(method_repo_path("mineru_popo"), [
+        patches / name for name in ("same_page.patch", "pr12.patch", "pr15.patch", "failure_propagation.patch")])
     for python in (CONDA_ENV_ROOT / PROFILE.conda_env / "bin/python", args.popo_vllm_python):
         if not python.is_file():
             raise FileNotFoundError(f"Missing service interpreter: {python}")

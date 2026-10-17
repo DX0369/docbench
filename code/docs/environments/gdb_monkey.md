@@ -88,7 +88,7 @@ PYTHONNOUSERSITE=1 "$MONKEY_PY" -m pip install --no-deps --no-build-isolation \
 
 ## 源码补丁
 
-恢复锁定 HEAD `70f6e2c5583a563796d7e0ec8a319d5bcfb86219` 后，顺序应用三份现用补丁：
+源码快照（revision `70f6e2c5583a563796d7e0ec8a319d5bcfb86219`）已依次包含三份现用补丁：
 
 1. `failure_propagation.patch`：只保留当前async路径的真实错误传播；默认遇到首个区域异常即抛出。
    项目 `async_runtime.py` 打开补丁中的 `gdb_return_region_exceptions`，按下标收集区域异常并用占位符
@@ -108,16 +108,10 @@ PYTHONNOUSERSITE=1 "$MONKEY_PY" -m pip install --no-deps --no-build-isolation \
 不再修改官方分组代码；split_files启用的整页识别行为和旧单PDF路线并非完全等价。
 
 ```bash
-# 仅用于干净的锁定 checkout；已应用时不要重复执行。
+# 根仓库中的源码快照已包含三份补丁；只做已应用检查。
+# 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
 for patch in failure_propagation region_concurrency tiny_image; do
-  git -C "$GDB_METHOD_ROOT/monkeyocr" apply --check \
-    "$GDB_ROOT/code/src/methods/monkeyocr/patches/$patch.patch" || break
-  git -C "$GDB_METHOD_ROOT/monkeyocr" apply \
-    "$GDB_ROOT/code/src/methods/monkeyocr/patches/$patch.patch" || break
-done
-# 当前 checkout 的只读已应用检查：
-for patch in failure_propagation region_concurrency tiny_image; do
-  git -C "$GDB_METHOD_ROOT/monkeyocr" apply --reverse --check \
+  git -C "$GDB_ROOT" apply --directory=third_party/methods/monkeyocr --reverse --check \
     "$GDB_ROOT/code/src/methods/monkeyocr/patches/$patch.patch" || break
 done
 ```

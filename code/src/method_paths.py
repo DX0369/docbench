@@ -48,16 +48,32 @@ def method_repo_path(method_id: str) -> Path:
     return configured_path(env_name, METHOD_ROOT / directory)
 
 
-def require_failure_patch(method_id: str, patch_name: str = "failure_propagation.patch") -> None:
-    """Check the documented source patch once at runtime construction; never apply it implicitly."""
-    repo = method_repo_path(method_id)
-    patch = Path(__file__).parent / "methods" / method_id / "patches" / patch_name
-    result = subprocess.run(
-        ["git", "-C", str(repo), "apply", "--reverse", "--check", str(patch)],
-        capture_output=True, text=True, check=False,
-    )
+def patch_apply_command(repo: Path, *options: str) -> list[str]:
+    """`git apply` targeting a source snapshot.
+
+    Snapshots are plain directories inside the root repository, where `git -C <snapshot> apply`
+    silently skips every file. Run from the enclosing work tree with --directory instead.
+    """
+    toplevel = subprocess.run(["git", "-C", str(repo), "rev-parse", "--show-toplevel"],
+                              capture_output=True, text=True, check=False)
+    if toplevel.returncode:
+        return ["git", "-C", str(repo), "apply", *options]
+    root = Path(toplevel.stdout.strip()).resolve()
+    relative = repo.resolve().relative_to(root)
+    directory = [] if str(relative) == "." else [f"--directory={relative}"]
+    return ["git", "-C", str(root), "apply", *directory, *options]
+
+
+def check_patches_applied(repo: Path, patches: list[Path]) -> None:
+    """Fail unless every documented patch is present in the snapshot; never apply it implicitly."""
+    # Absolute patch paths: the command may run from the enclosing work tree.
+    result = subprocess.run(patch_apply_command(repo, "--reverse", "--check", *(str(p.resolve()) for p in patches)),
+                            capture_output=True, text=True, check=False)
     if result.returncode:
-        raise RuntimeError(
-            f"Required source patch {patch_name} is absent or has drifted: {repo}. "
-            f"Apply the documented patch first: git -C {repo} apply {patch}\n{result.stderr}"
-        )
+        names = ", ".join(patch.name for patch in patches)
+        raise RuntimeError(f"Required source patch {names} is absent or has drifted: {repo}\n{result.stderr}")
+
+
+def require_failure_patch(method_id: str, patch_name: str = "failure_propagation.patch") -> None:
+    check_patches_applied(method_repo_path(method_id),
+                          [Path(__file__).parent / "methods" / method_id / "patches" / patch_name])

@@ -107,6 +107,14 @@ def snapshot_state(repository: Repository) -> tuple[str, str]:
     return ("version-ok" if match.group(1) == expected else "version-mismatch"), match.group(1)
 
 
+def repository_at(path: Path) -> Repository:
+    """Catalog entry whose snapshot directory is `path`."""
+    matches = [item for item in load_repositories(METHOD_CATALOG_PATH) if item.path.resolve() == path.resolve()]
+    if len(matches) != 1:
+        raise ValueError(f"No unique catalog repository for {path}")
+    return matches[0]
+
+
 def print_status(repositories: list[Repository]) -> int:
     print("id\tstate\tsnapshot version\trelease\tlocked revision\tpath")
     failed = False

@@ -4,7 +4,6 @@ from __future__ import annotations
 from collections import Counter
 import html
 from pathlib import Path
-import shutil
 
 from common import write_json, write_text
 
@@ -50,11 +49,9 @@ def export_tree(tree, blocks, asset_root: Path, output: Path):
                 relative = source.relative_to(asset_root)  # reject absolute/traversal escapes
                 if not source.is_file():
                     raise FileNotFoundError(source)
-                destination = output / "images" / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(source, destination)
-                image_path = destination.relative_to(output).as_posix()
-                # Tables use their HTML; retain crops for provenance, not duplicate rendering.
+                # Official crop exists; keep a dangling reference and save no image asset.
+                image_path = (Path("images") / relative).as_posix()
+                # Tables use their HTML; record their crop reference without duplicate rendering.
                 if kind != "table":
                     chunks.append(f"![](<{image_path}>)")
                 entries.append({"image_path": image_path, "source_img_path": asset,

@@ -72,7 +72,8 @@ python3 "$GDB_ROOT/code/src/method_repositories.py" --method glmocr status
 ```bash
 unset PYTHONPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
-git -C "$GDB_METHOD_ROOT/glmocr" apply --reverse --check \
+# 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
+git -C "$GDB_ROOT" apply --directory=third_party/methods/glmocr --reverse --check \
   "$GDB_ROOT/code/src/methods/glmocr/patches/failure_propagation.patch"
 conda run -n gdb_glmocr python -m pip check
 # 仅接受上文的一条已知冲突；有其他缺包/冲突时先停止处理。

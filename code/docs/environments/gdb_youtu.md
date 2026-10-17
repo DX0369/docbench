@@ -47,14 +47,11 @@ rm "$GDB_ROOT/tmp/gdb_youtu_requirements.txt"
 
 ## 必需补丁与隔离检查
 
-在新的干净checkout应用既有补丁；已应用时只做reverse-check，不重复修改：
+根仓库中的源码快照已包含补丁；只做reverse-check，不重复修改：
 
 ```bash
-git -C "$GDB_METHOD_ROOT/youtu" apply --check \
-  "$GDB_ROOT/code/src/methods/youtu/patches/failure_propagation.patch"
-git -C "$GDB_METHOD_ROOT/youtu" apply \
-  "$GDB_ROOT/code/src/methods/youtu/patches/failure_propagation.patch"
-git -C "$GDB_METHOD_ROOT/youtu" apply --reverse --check \
+# 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
+git -C "$GDB_ROOT" apply --directory=third_party/methods/youtu --reverse --check \
   "$GDB_ROOT/code/src/methods/youtu/patches/failure_propagation.patch"
 
 PYTHONNOUSERSITE=1 conda run -n gdb_youtu python -m pip check

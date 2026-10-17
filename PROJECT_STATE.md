@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-17 17:07 +08:00
+更新时间：2026-10-17 18:52 +08:00
 
 ## 当前阶段
 
@@ -36,7 +36,7 @@
   - CPU 验证：新增 `validation/test_failure_records.py` 7 项，`test_mineru4` 10 项、`test_monkeyocrv2` 3 项通过；修改路线的 throughput/latency dry-run 通过。
   - 2026-10-17 16:25 +08:00 按用户决定继续修改（CPU 测试 9 项与 dry-run 通过，未跑 GPU）：Unlimited `page_pool` 改用官方单图配方（"document parsing."、gundam、ngram window 128），`joint` 保持多页配方，`--skip-existing` 不复用不同配方的输出；Hunyuan 1.5 AR 去掉仅属 1.0 README 的 `--no-enable-prefix-caching --mm-processor-cache-gb 0`，1.5 上下文在所有入口统一为 65536；MonkeyOCRv2 取消 8 文档供给上限，提交全部文档、仅由官方页面窗口 P 约束；DeepSeek 图片 ref 按官方写 `images/{jdx}_{idx}.jpg` 悬空占位（不保存裁图）；放弃 MonkeyOCRv2 DFlash 并删除其诊断产物。其他与官方不同的显存/上下文/max_num_seqs 维持现状。
   - 2026-10-17 17:07 +08:00 第三轮修改（CPU 测试 14 项、`test_mineru4`、`test_monkeyocrv2` 与 dry-run 通过，未跑 GPU）：Unlimited 与 `run_service_batch`/`run_native_batch` 拒绝覆盖已有输出；OpenAI SDK 传输重试按页计为 `sdk_transport_retry`；GPU 监控记录采样失败；metrics 质量 warning 统一为 `warnings: [{page_number, reason, ...}]`（Unlimited 改名 `generation_length_limit`，旧产物不改写、新 validator 不再兼容旧字段）；MonkeyOCRv2 不再复制图片，TeleOCR 恢复官方图片引用但不落盘（裁图开销与官方一致，计入吞吐）；DeepSeek 渲染进程数 = min(P, CPU 核数)（旧结果为串行渲染，吞吐不可直接比较）；MinerU 3.x 身份字段缺失即失败；旧 MonkeyOCR 区域失败按所属 PDF 隔离（修改 failure_propagation 补丁与快照）；版本核对工具改为快照与版本元数据检查，`sync` 删除，MinerU 三个仓库登记 `version_file`/`source_version`。MinerU 4 缺 body 由上游 schema 保证、无需修改；MonkeyOCRv2 兼容入口已按全量输入成 job，无需修改。
-  - 新发现、未修改：快照无 `.git`，`mineru/preload.py` 的 `git rev-parse` 取到根仓库 HEAD，MinerU 3.4.x preload 会因 revision 不符报错；`method_paths.require_failure_patch` 与多个环境配方中的 `git -C <快照> apply --check` 在子目录下跳过全部文件、校验形同虚设（现有补丁实际均已应用）。
+  - 快照无 `.git` 引发的问题：`mineru/preload.py` 的 `git rev-parse` 取到根仓库 HEAD，MinerU 3.4.x preload 会因 revision 不符报错；`require_failure_patch` 与环境配方中的 `git -C <快照> apply --check` 在子目录下跳过全部文件、校验形同虚设（现有补丁实际均已应用）。2026-10-17 18:52 +08:00 已修复：preload 与 Popo preflight 改为核对 `methods.json` 快照与版本元数据（3.4.3 由 `source_version` 登记，去掉硬编码）；补丁检查与配方改为在根目录用 `--directory` 执行，CPU 测试确认能检出未应用补丁。MinerU-Popo 不再复制图片资产，保留悬空引用。均未跑 GPU。
   - 补 `gdb_teleocr`、`gdb_monkeyocrv2` 环境锁；删除旧仓库副本 `/data/wangsq/code/docbench_repo`（其 HEAD 已包含在当前历史中）。
 
 - 2026-10-10 14:12 +08:00 同步：MonkeyOCRv2 B-Parsing 普通 AR 已接入 `monkeyocrv2_b_parsing` / `monkeyocrv2_b_parsing_vllm_ar`，复用官方常驻 pipeline 和 V2 runner / CUDA graphs，不启用 DFlash。GPU 6 上中文试卷 2 页、英文杂志 2 页、英文试卷 6 页，共 3 文档 10 页，P1/P2 执行与输出结构校验均通过（3/3、零 issue、无失败）。启动耗时 77.32/67.66 秒，ready 后处理 26.78/19.15 秒，处理吞吐 0.373/0.522 页/秒；仅为单次有界 smoke，缓存未统一控制，不据此选择最优 P 或宣称内容准确率。初次 P1 因 adapter 将官方 JSON 文件名与绝对路径比较而导出失败，已修正并通过回归，不改上游源码、模型或依赖。抽查中文正文、表格和图片引用；英文试卷末页仅含页眉页脚，官方过滤后 Markdown 为空但页覆盖完整。服务已退出，GPU 6 恢复约 18 MiB。Latency 已实现逐文档提交、内部页面窗口 64，并通过代码测试和 dry-run，真实 GPU latency smoke 尚未完成。`tmp/smoke/monkeyocrv2_ar_gpu6_20261010_114344/` 现只保留 P2 输出和 P1 日志/metadata（P1 输出已删除）。环境迁移锁已于 2026-10-17 导出。
@@ -87,7 +87,7 @@
 
 先核查 MinerU 4.0.11 P1/P2 smoke 正文及复杂跨页、长文档覆盖需求，再决定是否扩展有界验证或进行真实吞吐搜索。
 
-0. 正式调参前，对本轮改动的 Jina、Hunyuan、LightOn、Qianfan、DeepSeek、TeleOCR、WeVisDoc、Unlimited page_pool、MonkeyOCRv2 路线做真实 GPU 短 smoke（用户暂缓）；待处理：MinerU 3.4.x preload 与补丁校验对 git 的依赖（见上）；Paddle 服务配置暂不改。
+0. 正式调参前，对本轮改动的 Jina、Hunyuan、LightOn、Qianfan、DeepSeek、TeleOCR、WeVisDoc、Unlimited page_pool、MonkeyOCRv2 路线做真实 GPU 短 smoke（用户暂缓）；Paddle 服务配置暂不改。
 
 1. 使用固定的 20 文档清单，对各方法执行有限 P 搜索或指定 P 运行；一次只使用一张 GPU，不自动并行分发正式任务。
 2. 为每个方法记录可复现的选定 profile，并区分官方路线、项目兼容补丁和实验性路线。

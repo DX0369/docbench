@@ -15,7 +15,7 @@ from benchmark.collect_failed_pdfs import collect_paths
 from benchmark.run_single_gpu import latency_unprocessed_docs
 from methods.deepseek_ocr2.vllm import parse_ref_det_entries, write_pdf_outputs
 from methods.qianfan_ocr import runtime as qianfan
-from paths import TMP_ROOT
+from paths import PROJECT_ROOT, TMP_ROOT
 from validation.validate_outputs import ValidationResult, validate_doc_dir
 
 
@@ -223,6 +223,35 @@ class FailureRecordTests(unittest.TestCase):
             with patch.dict("os.environ", {k: v for k, v in env.items() if k != missing}, clear=True):
                 with self.assertRaises(KeyError):
                     mineru_identity()
+
+    def test_snapshot_patch_check_detects_missing_patch(self):
+        import subprocess
+        from method_paths import check_patches_applied, patch_apply_command
+        repo = self.tmp / "snapshot"
+        repo.mkdir()
+        (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+        patch = self.tmp / "change.patch"
+        patch.write_text("--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n", encoding="utf-8")
+        # The snapshot lives inside the root work tree, where `git -C snapshot apply` skips files.
+        self.assertIn("--directory=" + str(repo.resolve().relative_to(PROJECT_ROOT)), patch_apply_command(repo))
+        with self.assertRaises(RuntimeError):
+            check_patches_applied(repo, [patch])
+        subprocess.run(patch_apply_command(repo, str(patch)), check=True)
+        check_patches_applied(repo, [patch])
+
+    def test_popo_export_keeps_image_reference_without_copying(self):
+        from methods.mineru_popo.output import export_tree
+        assets = self.tmp / "assets"
+        (assets / "crops").mkdir(parents=True)
+        (assets / "crops/fig.jpg").write_bytes(b"jpg")
+        tree = {"type": "root", "content": "", "block_ids": [], "children": [
+            {"type": "image", "content": "", "block_ids": [1], "img_path": "crops/fig.jpg", "title": "",
+             "caption": "Figure 1", "metadata": "", "location": [[0, 0, 1, 1]]}]}
+        output = self.tmp / "popo_out"
+        output.mkdir()
+        export_tree(tree, [{"id": 1, "type": "image", "level": 0}], assets, output)
+        self.assertIn("![](<images/crops/fig.jpg>)", (output / "document.md").read_text())
+        self.assertFalse((output / "images").exists())
 
     def test_snapshot_version_metadata(self):
         from method_repositories import Repository, snapshot_state

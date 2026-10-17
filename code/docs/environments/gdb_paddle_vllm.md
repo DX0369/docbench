@@ -22,7 +22,7 @@
 以下保留官方安装器路线，并显式固定本机已验证的核心解析结果；不调用浮动最新版。
 
 ```bash
-git -C "$GDB_METHOD_ROOT/paddleocr" rev-parse HEAD
+python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
 
 (
   unset PYTHONPATH PYTHONHOME PIP_EXTRA_INDEX_URL PIP_TARGET PIP_PREFIX PIP_USER
