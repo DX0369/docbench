@@ -61,7 +61,7 @@ run_fixed monkeyocrv2_b_parsing 2
 run_fixed teleocr_vllm_async 1
 run_fixed lightonocr2_1b 1
 run_fixed xiaomi_ocr_0 1
-run_fixed jina_ocr_v1 1             # 复用 DFlash 环境；自动指定 CUDA 12.8 工具链
+run_fixed jina_ocr_v1 1             # 独立 gdb_jinaocr 环境；自动指定 CUDA 12.8 工具链
 ```
 
 当前正式 method ID 和 P 的实际含义如下：
@@ -333,7 +333,7 @@ Latency 模式只改变文档之间的调度：runtime/service 只启动一次�
 
 环境见 [gdb_jinaocr](environments/gdb_jinaocr.md)。仅 page pool，不注册 joint。
 固定官方严格 benchmark prompt，FastMTP `eagle` K=3。
-默认复用 DFlash 环境，工具链见环境说明；smoke 的 FlashInfer workspace 也应指向 tmp。
+默认使用独立 `gdb_jinaocr`，工具链见环境说明；smoke 的 FlashInfer workspace 也应指向 tmp。
 
 ```bash
 run_fixed jina_ocr_v1 4

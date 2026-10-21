@@ -153,7 +153,7 @@ SERVICE_TASKS: dict[str, ServiceTask] = {
         env_overrides=mineru4.environment_overrides(),
     ),
     "jina_ocr_v1": ServiceTask(
-        method_id="jina_ocr_v1", runner_env="gdb_hunyuan_dflash",
+        method_id="jina_ocr_v1", runner_env="gdb_jinaocr",
         worker_builder=build_jina_worker, docs_per_job=8,
         env_overrides={"PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"},
     ),

@@ -1,6 +1,6 @@
 # 方法环境安装配方
 
-Jina-OCR-v1 环境复用说明见 [gdb_jinaocr.md](gdb_jinaocr.md)。实验进展和结果统一见
+Jina-OCR-v1 独立环境与 tokenizer 兼容性说明见 [gdb_jinaocr.md](gdb_jinaocr.md)。实验进展和结果统一见
 [PROJECT_STATE.md](../../../PROJECT_STATE.md)，不在安装配方中重复记录。
 
 本目录是环境安装和迁移的唯一入口：本文件维护通用设置，各环境配方维护自己的版本、安装命令和已知问题。运行命令见 [RUN_COMMANDS.md](../RUN_COMMANDS.md)，吞吐规则见 [THROUGHPUT_TUNING_PROTOCOL.md](../THROUGHPUT_TUNING_PROTOCOL.md)。

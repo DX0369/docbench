@@ -19,6 +19,10 @@
 锁目录名称是历史导出批次，不代表所有文件同日导出。依赖发生实际变化后才更新对应快照；
 仅修改代码或文档时不重新导出。
 
+`gdb_jinaocr.*` 保存 Jina 独立环境，不再使用 DFlash 锁代替。安装及 tokenizer
+兼容性说明见 [gdb_jinaocr.md](../code/docs/environments/gdb_jinaocr.md)；
+实际验证范围见根目录 `PROJECT_STATE.md`，不从旧环境的 smoke 推断新环境覆盖范围。
+
 `gdb_mineru_4.*` 为用户创建的 MinerU 4.0.11 独立环境的首次快照。
 配方见 [gdb_mineru_4.md](../code/docs/environments/gdb_mineru_4.md)；
 MinerU 的本机 wheel 路径只记录安装来源，迁移时重新下载该版本，不直接 replay 临时路径。

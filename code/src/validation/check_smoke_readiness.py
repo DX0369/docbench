@@ -24,7 +24,7 @@ MINERU_PROFILES = {
 }
 
 ENV_BY_METHOD = {
-    "jina_ocr_v1": ("gdb_hunyuan_dflash",),
+    "jina_ocr_v1": ("gdb_jinaocr",),
     "xiaomi_ocr_0": ("gdb_glmocr",),
     "teleocr_vllm_async": ("gdb_teleocr",),
     "lightonocr2_1b": ("gdb_glmocr",),

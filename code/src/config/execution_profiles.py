@@ -268,7 +268,7 @@ def resolve_execution_profile(
 # per-method profiles cannot accumulate unrelated methods' options.
 RUNTIME_ARGUMENTS = {
     "jina": [
-        ("jina_env", str, "gdb_hunyuan_dflash"),
+        ("jina_env", str, "gdb_jinaocr"),
         ("jina_cuda_home", str, str(Path.home() / "software/cuda-envs/cuda-12.8")),
         ("jina_flashinfer_workspace", str, None),
         ("jina_model_path", str, None), ("jina_dpi", int, 200),
