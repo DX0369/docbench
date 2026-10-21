@@ -1,6 +1,6 @@
 # 项目状态
 
-更新时间：2026-10-17 18:52 +08:00
+更新时间：2026-10-21 23:35 +08:00
 
 ## 当前阶段
 
@@ -8,7 +8,7 @@
 
 ## 已完成
 
-- Jina-OCR-v1 `jina_ocr_v1` 已在 GPU 3 完成官方同步单页和两文档 P1/P2/latency smoke：中文试卷、英文杂志各 2 页，各轮输出校验 2/2 通过，无执行失败。固定严格 benchmark prompt、FastMTP eagle K=3，复用未改包的 DFlash 环境。修复仅涉及启动工具路径（conda run/ninja、CUDA 12.8）和 spawned worker 调用官方 register；不修改模型或环境源码。P1/P2 ready 后处理 29.16/21.95 秒，吞吐 0.137/0.182 页/秒；latency 中文→英文 24.20/7.82 秒、页面并发1。GPU 3 恢复18 MiB；未正式调参，不宣称全量稳定性或最优。一轮一次性产物核对后清理，仅保留结论。
+- 历史 Jina-OCR-v1（旧 `gdb_hunyuan_dflash` 环境 tokenizer 加载错误，输入 prompt 编码与输出解码均受影响，该环境下的结果不可用、不复用） `jina_ocr_v1` 在 GPU 3 完成官方同步单页和两文档 P1/P2/latency smoke：中文试卷、英文杂志各 2 页，各轮输出校验 2/2 通过，无执行失败。固定严格 benchmark prompt、FastMTP eagle K=3，当时复用未改包的 DFlash 环境。修复仅涉及启动工具路径（conda run/ninja、CUDA 12.8）和 spawned worker 调用官方 register；不修改模型或环境源码。P1/P2 ready 后处理 29.16/21.95 秒，吞吐 0.137/0.182 页/秒；latency 中文→英文 24.20/7.82 秒、页面并发1。GPU 3 恢复18 MiB；未正式调参，不宣称全量稳定性或最优。一轮一次性产物核对后清理，仅保留结论。2026-10-20 已确认该旧环境的 tokenizer 兼容性问题，因此上述记录只能证明当时执行链和输出结构通过，不能证明正文正确；当前独立环境及验证范围见下文。
 
 - 正式方法和执行路线已登记在 [`code/config/methods.json`](code/config/methods.json)，源码与模型绑定由方法版本清单和源码锁维护。
 - MinerU 3.0.3/2509、MinerU 3.4.x/2605、Hunyuan AR/DFlash、Unlimited SGLang 等版本已拆分为显式 method ID；兼容源码和精确历史源码已区分记录。
@@ -29,6 +29,47 @@
 
 ## 当前实验状态
 
+- 2026-10-21 12:01 +08:00 LightOnOCR-2 重复生成追加定位完成（GPU 0，CPU 输入核对及五次单图请求）：
+  - 沿用上一轮 PDFium 异常整页，直接 HTTP 绕过项目 adapter 后，与此前输出去除首尾空白后完全一致；再用官方 HF 模型类/processor 独立生成，两行短语各重复283次，同样用满4096 tokens。HF 生成参数有意对齐 vLLM 的 temperature=0.2/top_p=0.9/上限4096、seed=0，不声称逐字照搬 HF 示例的1024上限默认解码；权重加载无缺失、意外或形状不匹配。
+  - 同环境 HF 控制：官方收据359 tokens、简单中文封面154 tokens、同报纸单个文章裁图1206 tokens，均正常 EOS、不再出现数百次循环。人工抽查裁图仍有明显错误，如“3岁以下”变“3岁以上”，“托育费用仍偏高”变“仍偏低”；正常结束不代表正文准确。
+  - CPU 实际 processor 核对：两后端 tokenizer 组件、特殊 token 和非图像模板 token 一致；regex 修复 flag 仅内存试验未改变该 image-only 模板 IDs，未应用于模型或正式运行。图像路径有真实差异：HF 张量 `[3,1540,1078]`/输入2102 tokens，vLLM `[3,1540,1092]`/2157 tokens，来自当前14/28对齐差异；两边均重复，不能把它判为唯一根因。
+  - 结论限于本案例：重复已在服务响应中，独立官方 HF 也复现，更支持官方推理链在密集中文整页上的退化，而非项目拼接/调用错误。裁图同时改变有效分辨率、布局和内容量，不能单独定因；共用 Transformers/底层算子与模型资产尚未完全隔离，不宣称模型的绝对能力上限或推广到所有异常。
+  - 诊断产物已于 2026-10-21 清理，仅保留本条结论。未改正式 adapter、环境、权重或历史输出；已清理可再生缓存及一次推理前的诊断脚本序列化失败记录。GPU 0 恢复32 MiB，自建服务端口已释放。本轮到此停止，不自动加去重、修改 tokenizer、切换裁图路线或扩展实验。
+
+- 2026-10-21 10:47 +08:00 LightOnOCR-2 异常页预处理对照完成（GPU 0，两次单页请求）：
+  - 对中文报纸 `supplement_newspaper_zh_______2025-07-17__1_4` 第 1 页，复用同一个 `gdb_glmocr` / vLLM 服务和现有 image-only 请求函数；两条均固定诊断 seed=0、temperature=0.2、top_p=0.9、max_tokens=4096。只比较现有 Poppler 200 DPI + PIL/LANCZOS 1540 预缩放，与官方模型卡 PDFium scale=2.77 + PNG、不做客户端缩放；不修改主线 adapter、环境或模型。
+  - 现有路线请求图 1065×1540，输出 4,245 字符，末段出现连续 1,891 次“是，”；官方路线请求图 3117×4505，输出 4,468 字符，“2025年7月 版摘”出现 372 次。两条均为 2,157 输入 tokens、4,096 生成 tokens、finish_reason=length；均未复现历史特定短语“深圳市教育局”，但都发生明显重复退化。
+  - 结论：切换官方模型卡预处理没有消除该页异常，不能将问题单独归因于 Poppler 或客户端预缩放；单页单 seed 不能确定重复发生率，也未分离模型能力与当前后端/环境的影响。服务另有 tokenizer regex 兼容 warning，本轮不修改，也不认定其为根因。没有改生成参数、加去重或展开其它测试。
+  - 诊断产物已于 2026-10-21 清理，仅保留本条结论。首次启动因诊断临时路径过长触发 Unix socket 限制，缩短路径后完成；已清理该次启动失败产物及可再生缓存。自建服务已停止，GPU 0 恢复约 32 MiB。
+
+- 2026-10-21 00:38 +08:00 Unlimited 多页异常追加定位，GPU 0 五次有界请求完成：
+  - 不改正式 adapter、环境、权重或配置。SGLang 复用上一轮报纸原图，分别只送前 1/2 页；再用现有 `gdb_unlimited_ocr`（Torch 2.10.0+cu128、Transformers 4.57.1）直接调用官方 `infer_multi`，对同图前 1/2 页各运行一次；最后使用官方 README 的 PyMuPDF 300 DPI 渲染前两页，再运行一次官方 Transformers。均为 joint/base、1024 图像尺寸、greedy、ngram 35/window 1024、P1；固定输出上限 16384，HF 的 `max_length` 按实际输入长度加 16384 设置，未误作输出上限。
+  - SGLang 前 1 页：278 输入、2283 生成 tokens、9773 字符、1 个 PAGE；前 2 页：551 输入、5044 生成 tokens、20922 字符、仍仅 1 个 PAGE。HF 同图前 1 页：2360 生成 tokens、10123 字符、1 个 PAGE；前 2 页：5796 生成 tokens、25851 字符、仍仅 1 个 PAGE，并有局部问答重复。HF + PyMuPDF 300 DPI 前 2 页：4301 生成 tokens、17670 字符、仍仅 1 个 PAGE。五次均正常 EOS 1 结束，未触及生成上限；这些时间不用于后端速度比较。
+  - 原图人工核对：单页两后端均识别出首页大标题及对应正文，但不能据此宣称内容全部正确；两页三个配置均未输出第二页大标题，第二页部分正文混入同一段，缺 PAGE 不只是导出器的计数问题。HF 加载 warning 中的 `vision_model.embeddings.position_ids` 已在实际模型实例核对为完整 `arange(257)`，不是随机初始化的视觉权重。
+  - 当前结论：该两页异常在独立官方 Transformers 路线及官方渲染方式下同样出现，不依赖本项目 SSE/Markdown 导出、SGLang SM86 补丁或 Poppler 200 DPI；更指向官方多页推理链在此文档上的问题。尚不能把模型权重能力与上游实现缺陷完全分开，也没有在独立 backend 重跑原 26 页以复现其短句 111 次重复，不将两页结论扩大为所有异常的根因。未发现需要立即修改正式调用或重装环境的证据；仍保留质量 warning，不升级为执行失败、不自动补分页。
+  - 诊断产物已于 2026-10-21 清理，仅保留本条结论。本轮可再生缓存和空输出目录已清理。所有诊断进程已退出，GPU 0 恢复约 32 MiB，端口 29887 无监听。
+
+- 2026-10-20 22:54 +08:00 Unlimited 异常定位，有界对照完成：
+  - CPU 实际加载官方 SGLang tokenizer/processor：输入 processor 的原始分词组件完全一致；输出 tokenizer 的 ByteLevel 预分词器/解码器一致，空 normalizer 表示及 `byte_fallback`/`fuse_unk` 标志不同。原始 ByteLevel 字母表 256/256 均在词表内，词表、merges 和特殊 token 配置一致；中英文、空白、两个官方 prompt、标签及完整 32,360 字符异常文本的编码、解码、批量解码均与原始 tokenizer 一致。未发现该案例的 Jina 式编解码错乱，不宣称所有 tokenizer 状态逐字相同。
+  - 按用户指定 GPU 0，仅一个服务、P1、两文档各两条请求路径，共四次请求。官方 README 请求函数与项目 adapter 共用同一组 Poppler 200 DPI 图片，固定 joint/base、temperature 0、ngram 35/window 1024、max_tokens 16384、context 32768、显存比例 0.9；实际生成 payload 一致，仅 adapter 额外请求流式 usage。官方请求也显式加上项目的 16384 上限，不称为原封不动的完整官方示例。
+  - RFC6263 控制文档 3 页：两条路径原始文本逐字一致，8,819 字符、3 段、stop，adapter 分页导出检查通过且无 warning。China Daily 报纸 26 页：两条路径及导入的历史异常文本逐字一致，32,360 字符、1 个 PAGE、目标短句重复 111 次；adapter usage 为 prompt 7,103、completion 10,051，以 stop/EOS 1 结束，未触及上限；保存内容与原始响应一致，只记录 page_count_mismatch。
+  - 第一轮结论限于所测样本：重复/缺分页已在服务返回内容中存在，不是 adapter 的流收集或 Markdown 导出造成。该轮尚未分离共同的图像预处理、模型推理及 SM86 兼容路径，不能直接定性为模型固有能力限制；后续页数、渲染和独立 backend 对照见上条。未做吞吐搜索，也未修改环境、模型和历史预测。
+  - 诊断产物已于 2026-10-21 清理，仅保留本条结论。可再生编译缓存与运行临时目录已清理。服务已退出，端口 29887 释放，GPU 0 恢复约 32 MiB。
+
+- 2026-10-20 22:32 +08:00 Unlimited 记录修复（未运行 GPU）：
+  - 保留固定 `max_tokens=16384` 和现有推理配方；`page_pool` metrics 补记实际生成上限。
+  - `page_pool` 的逐页长度 warning 纳入 trial 汇总，按文档计数，并复用现有调参产物保留规则；有 warning 的输出不再被成功产物清理删除。正常结束的长度 warning 仍不算执行失败，joint 的记录不变。
+  - 六项定向 CPU 测试通过，覆盖实际导出、请求上限、两路线 warning 汇总/保留、无 warning 时的清理与保留、缺失 warning 字段显式报错及既有输出保护；服务、模型响应和监控均模拟，一次性产物已清理。未修改环境、模型或历史预测。
+  - 报纸案例的重复与缺分页根因仍未证实；后续 tokenizer 和同图同参数对照已完成，结果见上条。
+
+- 2026-10-20 21:55 +08:00 Jina tokenizer 环境修复与 P1 验证：
+  - 旧环境 CPU 对照实际复现：vLLM 将配置识别为 `deepseek_ocr`，Transformers 5.5.3 按 Llama 路径加载出 `Metaspace`，不符合模型 `tokenizer.json` 的 ByteLevel 配置。独立 `gdb_jinaocr` 从旧环境克隆，恢复克隆产生的 setuptools 重复登记后，包版本逐项对比确认仅 Transformers 改为 5.14.1；原 DFlash 环境未修改，未新增依赖冲突。
+  - 新环境实际 vLLM tokenizer 与 prompt tokenizer 均保留原始预分词器和 ByteLevel decoder；中英文、空格、换行、特殊 token 及完整严格 prompt 的编码与解码均与原 tokenizer.json 一致。官方 helper、AsyncLLM 与重复检测接口检查通过，不引入自定义 tokenizer、模型源码补丁或输出字符替换。
+  - GPU 0 只运行 P1：NIST `industry_standard_en_NIST_SP_800-87r2_74_76` 2 页、中文试卷 `exam_zh_2019_______________________0_3` 3 页，共两文档五页。执行成功 2/2、页覆盖 5/5，validator 为 2/2、零 issue，无失败或遗漏；全部页面以 `stop` 结束、质量 warnings 为空。
+  - 五页均非空且无字面 `Ġ/Ċ`；NIST 原空白第一页生成 1,716 字符，第二页 1,811 字符，抽查机构代码与 PDF 正文相符；中文三页分别为 991、1,379、1,115 字符。这里只确认所选案例的异常消失，不代表全部历史空页的根因均已验证，也不构成完整准确率评测。
+  - 保留严格 prompt、200 DPI、4096 生成上限、32768 上下文及官方 FastMTP eagle K=3；日志确认 drafter 加载、MTP 共享权重和推测解码路径。启动 250.890 秒，ready 后处理 27.233 秒，总计 278.123 秒；首次 JIT/缓存影响未控制，不据此宣称吞吐最优。引擎正常退出，GPU 0 恢复约 32 MiB。
+  - 默认环境绑定、迁移配方、运行命令与独立环境三份锁已同步。按用户要求未运行 P2、latency、压力搜索或全量重推理；历史预测未改写。本轮一次性 smoke、诊断及缓存核对后清理，只保留本条结论。
+
 - 2026-10-17 15:59 +08:00 审计与修复（未启动 GPU/正式运行）：
   - 证据：`experiments/` 为空；tmp、archive 中找不到任何 3090 20 文档（146 页）P1/P2/P4 结果，下表“既有 20 文档”类结论及 `methods.json` 中相应 `validation_status` 仅为历史记录，不可复核；`throughput_profiles/rtx3090.json` 的 Unlimited joint P4、Marker P4 无调参产物，不视为定版。
   - 框架修复：`validate_outputs` 将含 `error.json` 的文档判为失败；latency 中途停止时未到达的 PDF 记入 `unprocessed_docs`；`collect_failed_pdfs.py` 按当前 aggregate schema 重写并显式失败；新增可选 `--processing-timeout-seconds`；删除 native 入口的第二套 latency 实现与 legacy 计时分支。
@@ -39,12 +80,12 @@
   - 快照无 `.git` 引发的问题：`mineru/preload.py` 的 `git rev-parse` 取到根仓库 HEAD，MinerU 3.4.x preload 会因 revision 不符报错；`require_failure_patch` 与环境配方中的 `git -C <快照> apply --check` 在子目录下跳过全部文件、校验形同虚设（现有补丁实际均已应用）。2026-10-17 18:52 +08:00 已修复：preload 与 Popo preflight 改为核对 `methods.json` 快照与版本元数据（3.4.3 由 `source_version` 登记，去掉硬编码）；补丁检查与配方改为在根目录用 `--directory` 执行，CPU 测试确认能检出未应用补丁。MinerU-Popo 不再复制图片资产，保留悬空引用。均未跑 GPU。
   - 补 `gdb_teleocr`、`gdb_monkeyocrv2` 环境锁；删除旧仓库副本 `/data/wangsq/code/docbench_repo`（其 HEAD 已包含在当前历史中）。
 
-- 2026-10-10 14:12 +08:00 同步：MonkeyOCRv2 B-Parsing 普通 AR 已接入 `monkeyocrv2_b_parsing` / `monkeyocrv2_b_parsing_vllm_ar`，复用官方常驻 pipeline 和 V2 runner / CUDA graphs，不启用 DFlash。GPU 6 上中文试卷 2 页、英文杂志 2 页、英文试卷 6 页，共 3 文档 10 页，P1/P2 执行与输出结构校验均通过（3/3、零 issue、无失败）。启动耗时 77.32/67.66 秒，ready 后处理 26.78/19.15 秒，处理吞吐 0.373/0.522 页/秒；仅为单次有界 smoke，缓存未统一控制，不据此选择最优 P 或宣称内容准确率。初次 P1 因 adapter 将官方 JSON 文件名与绝对路径比较而导出失败，已修正并通过回归，不改上游源码、模型或依赖。抽查中文正文、表格和图片引用；英文试卷末页仅含页眉页脚，官方过滤后 Markdown 为空但页覆盖完整。服务已退出，GPU 6 恢复约 18 MiB。Latency 已实现逐文档提交、内部页面窗口 64，并通过代码测试和 dry-run，真实 GPU latency smoke 尚未完成。`tmp/smoke/monkeyocrv2_ar_gpu6_20261010_114344/` 现只保留 P2 输出和 P1 日志/metadata（P1 输出已删除）。环境迁移锁已于 2026-10-17 导出。
+- 2026-10-10 14:12 +08:00 同步：MonkeyOCRv2 B-Parsing 普通 AR 已接入 `monkeyocrv2_b_parsing` / `monkeyocrv2_b_parsing_vllm_ar`，复用官方常驻 pipeline 和 V2 runner / CUDA graphs，不启用 DFlash。GPU 6 上中文试卷 2 页、英文杂志 2 页、英文试卷 6 页，共 3 文档 10 页，P1/P2 执行与输出结构校验均通过（3/3、零 issue、无失败）。启动耗时 77.32/67.66 秒，ready 后处理 26.78/19.15 秒，处理吞吐 0.373/0.522 页/秒；仅为单次有界 smoke，缓存未统一控制，不据此选择最优 P 或宣称内容准确率。初次 P1 因 adapter 将官方 JSON 文件名与绝对路径比较而导出失败，已修正并通过回归，不改上游源码、模型或依赖。抽查中文正文、表格和图片引用；英文试卷末页仅含页眉页脚，官方过滤后 Markdown 为空但页覆盖完整。服务已退出，GPU 6 恢复约 18 MiB。Latency 已实现逐文档提交、内部页面窗口 64，并通过代码测试和 dry-run，真实 GPU latency smoke 尚未完成。smoke 产物已于 2026-10-21 清理。环境迁移锁已于 2026-10-17 导出。
 - MonkeyOCRv2 DFlash：曾通过旧 runner + eager + HF override 的六页 smoke；默认 V2 runner warmup 失败定位至 Triton top-k/top-p kernel 非法写入，根因未修复。2026-10-17 用户决定放弃该路线，诊断产物已删除；不接入、不推广其兼容配置。
 
 | 方法族/路线 | 当前状态 |
 | --- | --- |
-| Jina-OCR-v1 | 官方严格 prompt、单常驻 FastMTP page pool 和 latency 已通过 GPU 3 两文档 smoke；复用 DFlash 环境，未正式调参。 |
+| Jina-OCR-v1 | 独立 `gdb_jinaocr` / Transformers 5.14.1 修复实际 vLLM ByteLevel 加载；GPU 0 两文档五页 P1 通过，原 NIST 空页与所选页 `Ġ/Ċ` 异常消失。新环境未跑 P2/latency，未正式调参或全量重推理。 |
 | Marker | 既有 20 文档 P1/P2/P4 共享 worker 验证通过；P4 仅为该子集候选，未统一选定最终 profile。 |
 | PP-StructureV3 | 既有 20 文档 P1/P2/P4 的 batch 倍率搜索有提速但不单调；P4 仅为已测最快，未统一选定最终 profile。 |
 | PaddleOCR-VL 1.5/1.6 | 既有短多页及 1.6 P1/P2/P4/P8 pipeline/区域服务验证通过；P 不等于所有内部 batch，未统一选定最终 profile。 |
@@ -87,7 +128,7 @@
 
 先核查 MinerU 4.0.11 P1/P2 smoke 正文及复杂跨页、长文档覆盖需求，再决定是否扩展有界验证或进行真实吞吐搜索。
 
-0. 正式调参前，对本轮改动的 Jina、Hunyuan、LightOn、Qianfan、DeepSeek、TeleOCR、WeVisDoc、Unlimited page_pool、MonkeyOCRv2 路线做真实 GPU 短 smoke（用户暂缓）；Paddle 服务配置暂不改。
+0. 正式调参前，对本轮改动的 Hunyuan、LightOn、Qianfan、DeepSeek、TeleOCR、WeVisDoc、Unlimited page_pool、MonkeyOCRv2 路线做真实 GPU 短 smoke（用户暂缓）；Paddle 服务配置暂不改。Jina 新环境已完成上述 P1 验证，后续是否重推理历史异常页由用户决定，不自动扩大运行范围。
 
 1. 使用固定的 20 文档清单，对各方法执行有限 P 搜索或指定 P 运行；一次只使用一张 GPU，不自动并行分发正式任务。
 2. 为每个方法记录可复现的选定 profile，并区分官方路线、项目兼容补丁和实验性路线。
