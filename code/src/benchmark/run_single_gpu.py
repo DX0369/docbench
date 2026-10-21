@@ -654,15 +654,18 @@ def run_trial(
             encoding="utf-8",
         )
     quality_summary = {}
-    if method == "unlimited_ocr_sglang" and base_args.unlimited_ocr_request_mode == "joint":
+    if method == "unlimited_ocr_sglang":
         warning_docs = []
         for path in completed_inputs:
             output = get_doc_output_dir(base_args.input_root, trial_output_root / method, path)
             metrics = json.loads((output / "metrics.json").read_text())
             if metrics["warnings"]:
-                warning_docs.append({"pdf_path": str(path), "input_page_count": metrics["input_page_count"],
-                    "output_segment_count": metrics["output_segment_count"], "finish_reason": metrics["finish_reason"],
-                    "warnings": metrics["warnings"]})
+                warning_doc = {"pdf_path": str(path), "input_page_count": metrics["input_page_count"],
+                               "warnings": metrics["warnings"]}
+                if base_args.unlimited_ocr_request_mode == "joint":
+                    warning_doc.update(output_segment_count=metrics["output_segment_count"],
+                                       finish_reason=metrics["finish_reason"])
+                warning_docs.append(warning_doc)
         quality_summary = {
             "throughput_page_basis": "completed_request_input",
             "quality_warning_doc_count": len(warning_docs),

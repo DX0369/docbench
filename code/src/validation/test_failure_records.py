@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -144,6 +146,121 @@ class FailureRecordTests(unittest.TestCase):
                                   skip_existing=False, request_mode="joint")
         with self.assertRaises(FileExistsError):
             unlimited.should_skip(args, self.tmp / "doc.pdf")
+
+    def test_unlimited_page_pool_records_fixed_budget_and_page_warnings(self):
+        from methods.unlimited_ocr import client as unlimited
+        from PIL import Image
+        image = self.tmp / "page.png"
+        Image.new("RGB", (4, 4)).save(image)
+        args = argparse.Namespace(
+            input_root=self.tmp, output_root=self.tmp / "out", server_url="http://unused",
+            model_name="m", dpi=200, request_timeout_seconds=10, no_repeat_ngram_size=35,
+            request_mode="page_pool", page_concurrency=1, skip_existing=False, fail_fast=True,
+        )
+        with (
+            patch.object(unlimited, "TMP_ROOT", self.tmp),
+            patch.object(unlimited, "get_pdf_page_count", return_value=2),
+            patch.object(unlimited, "render_pdf_page", side_effect=lambda *_: nullcontext(image)),
+            patch.object(unlimited, "generate", return_value=(
+                "<PAGE>generated text", {"finish_reason": "length", "usage": {"completion_tokens": 16384}},
+            )) as generate,
+        ):
+            failed = unlimited.process_page_pool(args, [self.tmp / "doc.pdf"], logit_processor="lp")
+        self.assertFalse(failed)
+        self.assertEqual(generate.call_count, 2)
+        self.assertTrue(all(call.kwargs["payload"]["max_tokens"] == 16384 for call in generate.call_args_list))
+        output = args.output_root / "doc"
+        metrics = json.loads((output / "metrics.json").read_text())
+        self.assertEqual(metrics["max_tokens"], 16384)
+        self.assertEqual(metrics["warnings"], [
+            {"page_number": page, "reason": "generation_length_limit"} for page in (1, 2)])
+        self.assertEqual(metrics["page_count"], 2)
+        self.assertFalse((output / "error.json").exists())
+
+    def _run_unlimited_trial(self, metrics, *, request_mode, keep_outputs=False):
+        """Exercise real queue accounting/export cleanup without starting any process or monitor."""
+        import time
+        from benchmark import run_single_gpu as runner
+        from execution.queue import ensure_queue_layout, claim_next_job, write_job_status
+        root = Path(tempfile.mkdtemp(dir=self.tmp, prefix="unlimited_trial_"))
+        pdf = root / "doc.pdf"
+        argv = [
+            "run_single_gpu.py", "--method", "unlimited_ocr_sglang", "--gpu-id", "0", "--pressure", "1",
+            "--input-root", str(root), "--output-root-base", str(root / "out"),
+            "--log-root", str(root / "logs"), "--unlimited-ocr-request-mode", request_mode,
+        ]
+        if not keep_outputs:
+            argv.append("--discard-successful-outputs")
+        with patch.object(sys, "argv", argv):
+            args = runner.parse_args()
+
+        def fake_worker(command, *_args, **_kwargs):
+            output = Path(command[command.index("--output-root") + 1]) / "doc"
+            output.mkdir(parents=True)
+            (output / "metrics.json").write_text(json.dumps(metrics), encoding="utf-8")
+            (output / "document.md").write_text("generated text", encoding="utf-8")
+            queue = Path(command[command.index("--queue-dir") + 1])
+            pending, running, done = ensure_queue_layout(queue)
+            claimed = claim_next_job(pending, running, "w00")
+            write_job_status(done, claimed_path=claimed, worker_id="w00", failed=False,
+                             job_pdf_paths=[str(pdf)],
+                             extra={"successful_input_page_counts": {str(pdf): 2}})
+            claimed.unlink()
+            return Mock(wait=Mock(return_value=0), poll=Mock(return_value=0))
+
+        with (
+            patch.object(runner, "GpuMonitor") as gpu,
+            patch.object(runner, "CpuMonitor") as cpu,
+            patch.object(runner, "start_vllm_service", return_value=(None, 0.5)),
+            patch.object(runner, "run_command", side_effect=fake_worker),
+            patch.object(runner, "start_queue_processing", side_effect=lambda *_a, **_k: time.perf_counter()),
+            patch.object(runner, "queue_processing_seconds", return_value=1.0),
+            patch.object(runner, "terminate_process"),
+        ):
+            gpu.return_value.summary.return_value = {}
+            cpu.return_value.summary.return_value = {}
+            return runner.run_trial(
+                method=args.method, method_spec=runner.build_method_spec(args.method, args),
+                base_args=args, pdf_paths=[pdf], total_pages=2, concurrency=1, run_name="fixture",
+            )
+
+    def test_unlimited_trial_retains_quality_warnings_for_both_routes(self):
+        cases = {
+            "page_pool": {"input_page_count": 2, "warnings": [
+                {"page_number": page, "reason": "generation_length_limit"} for page in (1, 2)]},
+            "joint": {"input_page_count": 2, "output_segment_count": 1, "finish_reason": "length",
+                      "warnings": [{"page_number": None, "reason": "generation_length_limit"},
+                                   {"page_number": None, "reason": "page_count_mismatch"}]},
+        }
+        for route, metrics in cases.items():
+            with self.subTest(route=route):
+                summary = self._run_unlimited_trial(metrics, request_mode=route)
+                self.assertEqual(summary["status"], "ok")
+                self.assertEqual(summary["failed_doc_count"], 0)
+                self.assertEqual(summary["successful_page_count"], 2)
+                self.assertEqual(summary["quality_warning_doc_count"], 1)
+                self.assertEqual(summary["truncated_doc_count"], 1)
+                self.assertEqual(summary["page_mismatch_doc_count"], int(route == "joint"))
+                self.assertEqual(summary["quality_warning_docs"][0]["warnings"], metrics["warnings"])
+                output = Path(summary["trial_output_root"])
+                self.assertTrue((output / "unlimited_ocr_sglang" / "doc" / "document.md").is_file())
+                saved = json.loads((Path(summary["trial_log_dir"]) / "summary.json").read_text())
+                self.assertEqual(saved["quality_warning_docs"], summary["quality_warning_docs"])
+
+    def test_unlimited_trial_discards_only_warning_free_outputs(self):
+        for route in ("joint", "page_pool"):
+            for keep in (False, True):
+                with self.subTest(route=route, keep_outputs=keep):
+                    summary = self._run_unlimited_trial(
+                        {"warnings": []}, request_mode=route, keep_outputs=keep)
+                    self.assertEqual(summary["status"], "ok")
+                    self.assertEqual(summary["quality_warning_doc_count"], 0)
+                    self.assertEqual(summary["truncated_doc_count"], 0)
+                    self.assertEqual(Path(summary["trial_output_root"]).exists(), keep)
+
+    def test_unlimited_trial_requires_warning_records(self):
+        with self.assertRaises(KeyError):
+            self._run_unlimited_trial({}, request_mode="page_pool")
 
     def test_sdk_transport_retries_are_counted(self):
         import threading

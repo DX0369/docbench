@@ -525,6 +525,7 @@ def process_page_pool(args, pdf_paths, *, logit_processor):
             "input_mode": "independent_pages", "pdf_path": str(pdf), "output_dir": str(output),
             "server_url": args.server_url, "model_name": args.model_name, "prompt": RECIPES["page_pool"]["prompt"],
             "image_mode": RECIPES["page_pool"]["image_mode"], "dpi": args.dpi, "temperature": 0, "skip_special_tokens": False,
+            "max_tokens": MAX_TOKENS,
             "no_repeat_ngram_size": args.no_repeat_ngram_size, "ngram_window": RECIPES["page_pool"]["ngram_window"],
             "page_concurrency": args.page_concurrency, "request_completed": True,
             "page_count": len(ordered), "input_page_count": len(ordered),
