@@ -30,7 +30,7 @@
 ## 迁移后的检查命令
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
 unset PYTHONPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
 export PYTHONDONTWRITEBYTECODE=1

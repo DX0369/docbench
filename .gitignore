@@ -9,6 +9,9 @@
 /reports/
 /archive/
 
+# Local manuscript; not part of the source repository
+/TACL_DocFlowBench.pdf
+
 # Large upstream demo assets are not part of the benchmark source snapshot
 /third_party/methods/hunyuanocr/benchmarks/CHAOS-Bench/CHAOS-Bench.zip
 /third_party/methods/monkeyocr/asserts/Visualization.GIF

@@ -26,7 +26,8 @@ global_doc_bench/          # 唯一 Git 仓库
 URL 和 revision 记录在 `config/methods.json`；除 `monkeyocrv2` 外，快照不保留上游 `.git`。
 
 固定输入清单：`config/throughput_manifests/rtx3090_20.json`；选定运行参数：
-`config/throughput_profiles/rtx3090.json`。后者保留Marker和Unlimited joint的既有P4配置；
+`config/throughput_profiles/rtx3090.json`。后者仅保留 Marker 和 Unlimited joint 的历史 P4 配置，
+缺少可追溯的调参产物，不是已确认最优或可直接迁移的正式 profile；
 新搜索使用 `run_pressure_sweep.py --save-profile <JSON>`显式保存，
 `run_single_gpu.py --pressure P`或`--profile-file <JSON>`固定运行一次。
 另有 `rtx3090_4.json`（4文档/10页）供首次有界检查；命令与产物规则见吞吐文档。
@@ -35,8 +36,7 @@ URL 和 revision 记录在 `config/methods.json`；除 `monkeyocrv2` 外，快�
 
 普通批量与吞吐入口统一在 `src/benchmark/`；迁移、资产和输出检查统一在
 `src/validation/`，第三方仓库管理入口为 `src/method_repositories.py`。
-源码结构与 CPU 验证命令见 [源码导航](src/README.md)。旧分析/队列工具的源码快照保存在
-`../archive/code/src_pre_consolidation_6f608b9/`；对应旧提交不在当前仓库历史中。
+源码结构与 CPU 验证命令见 [源码导航](src/README.md)。历史归档不随仓库分发，当前运行不依赖它。
 
 - [项目目标与约定](../PROJECT.md)、[当前状态与下一步](../PROJECT_STATE.md)
 - [环境安装与迁移](docs/environments/README.md)
@@ -45,7 +45,7 @@ URL 和 revision 记录在 `config/methods.json`；除 `monkeyocrv2` 外，快�
 - [迁移后的运行命令](docs/RUN_COMMANDS.md)
 - [Runner 说明](src/README.md)
 - [模型下载说明](docs/MODELS.md)
-- [旧实验归档说明](../archive/README.md)
+- [新机器恢复入口](../README.md)
 
 ## 当前边界
 

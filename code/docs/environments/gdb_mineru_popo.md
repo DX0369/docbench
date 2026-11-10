@@ -1,6 +1,6 @@
 # gdb_mineru_popo
 
-更新时间：2026-10-03 14:28 +08:00
+更新时间：2026-11-10 21:41 +08:00
 
 ## 用途与验证范围
 
@@ -31,10 +31,10 @@ BeautifulSoup 来自本环境，已不依赖 `tmp/popo_smoke_deps`。没有升�
 
 ## 从零安装
 
-以下路径适用于当前服务器，迁移时替换项目路径。环境已存在时不要重复创建或删除。
+先按[通用设置](README.md#目录与命名)设置项目和 Conda 路径。环境已存在时不要重复创建或删除。
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
 unset PYTHONPATH PYTHONHOME
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 export PYTHONNOUSERSITE=1
 mkdir -p "$GDB_ROOT/tmp"
 export TMPDIR="$GDB_ROOT/tmp"
@@ -44,9 +44,11 @@ conda activate gdb_mineru_popo
 export POPO_PY="$CONDA_PREFIX/bin/python"
 
 "$POPO_PY" -m pip install \
+  --index-url https://repo.huaweicloud.com/repository/pypi/simple \
   uv
 export UV_LINK_MODE=copy
 "$POPO_PY" -m uv pip install --python "$POPO_PY" \
+  --default-index https://repo.huaweicloud.com/repository/pypi/simple \
   "torch==2.11.0" "torchvision==0.26.0" \
   "transformers==5.14.1" "tokenizers==0.22.2" \
   "accelerate==1.14.0" "huggingface-hub==1.24.0" \
@@ -81,9 +83,10 @@ PATCHES="$GDB_ROOT/code/src/methods/mineru_popo/patches"
 # 快照是根仓库中的普通目录：在根目录执行并用 --directory 指定快照，否则 git apply 会跳过全部文件。
 git -C "$GDB_ROOT" apply --directory=third_party/methods/MinerU-Popo --reverse --check \
   "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
+```
+
 测试源已在定版前验证后删除。迁移时使用 [运行命令](../RUN_COMMANDS.md) 中的 Popo
 组合入口，并用 `validate_outputs.py` 检查生成的输出目录。
-```
 
 定版前的核心 adapter 检查使用自建小样例，不再依赖历史 smoke 输出；测试源已删除，
 不替代真实模型链路验证。
@@ -101,7 +104,8 @@ git -C "$GDB_ROOT" apply --directory=third_party/methods/MinerU-Popo --reverse -
 
 ```bash
 env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 \
-  /data/wangsq/software/miniconda/envs/gdb_mineru_popo/bin/python -m pip install \
+  "$GDB_CONDA_ROOT/envs/gdb_mineru_popo/bin/python" -m pip install \
+  --index-url https://repo.huaweicloud.com/repository/pypi/simple \
   --no-deps loguru==0.7.3
 ```
 
@@ -114,7 +118,7 @@ env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 \
 
 2026-10-03 GPU3单服务验证通过：Python3.10.20、vLLM0.11.2、
 Torch2.9.0+cu128、Transformers4.57.6，解释器为
-`/data/wangsq/software/miniconda/envs/gdb_mineru/bin/python`。
+`$GDB_CONDA_ROOT/envs/gdb_mineru/bin/python`。
 隔离user site后的pip check、模型注册、本地AutoConfig/AutoTokenizer/AutoProcessor通过；
 真实纯文本表格行请求及带图标题请求正常结束，官方解析器可解析，标题ID覆盖通过。
 这不是完整组合、自然触发的续表合并或吞吐验证，详见吞吐协议中的当前限制。

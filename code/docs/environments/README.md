@@ -23,11 +23,12 @@ Jina-OCR-v1 独立环境与 tokenizer 兼容性说明见 [gdb_jinaocr.md](gdb_ji
 
 ## 查看官方环境要求
 
-先确认当前实际源码 revision，再在对应方法仓库内搜索安装入口：
+先按下文设置通用路径，通过清单核对源码快照，再在对应目录内搜索安装入口。
+以下以 PaddleOCR 为例；其他源码 ID 见 `config/methods.json`：
 
 ```bash
-cd "$GDB_METHOD_ROOT/<method>"
-git rev-parse HEAD
+python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
+cd "$GDB_METHOD_ROOT/paddleocr"
 
 find . -maxdepth 3 -type f \
   \( -iname 'README*' -o -iname 'requirements*.txt' \
@@ -55,7 +56,7 @@ rg -n -i \
 ## 迁移时的安装流程
 
 1. 记录新服务器 GPU、驱动、系统和磁盘信息。
-2. 按 `config/methods.json` checkout 第三方源码。
+2. 从根仓库恢复第三方源码快照，按 `config/methods.json` 和 `method_repositories.py status` 核对；不要在快照目录内重新 checkout 或重复应用补丁。
 3. 按本目录逐环境创建 Miniconda 命名环境，不在 `base` 安装方法依赖。
 4. 按 [MODELS.md](../MODELS.md) 下载模型并准备 Marker、PaddleX、MinerU 项目缓存。
 5. 按通用运行模板完成必要的 readiness、smoke 或吞吐验证；进展和结论记录在 `PROJECT_STATE.md`。
@@ -72,26 +73,25 @@ rg -n -i \
 统一使用 Miniconda 的命名环境：
 
 ```text
-/data/wangsq/software/miniconda/envs/<environment-name>
+$GDB_CONDA_ROOT/envs/<environment-name>
 ```
 
-这样与当前代码中的 `CONDA_ENV_ROOT`、`conda activate <name>` 和批跑参数保持一致。不要同时使用 `/data/wangsq/software/conda-envs/` 前缀环境，除非先修改代码使环境根目录可配置。
+启动器已支持 `GDB_CONDA_ROOT`，迁移时设置该变量并使用其下命名环境，不需要修改代码。
+不要将某个前缀环境路径误当成 Conda 安装根目录。
 
-环境配方不重复锁定第三方源码 commit；源码 revision 统一来自 `config/methods.json`。安装前应确认工作树实际 commit 与该锁文件一致。
+环境配方不重复锁定第三方源码 commit；源码 revision 统一来自 `config/methods.json`。
+第三方目录通常没有独立 `.git`；在其中运行 `git rev-parse` 可能读到根仓库 commit，不能用于核对上游版本。
 
-通用路径：
-
-如终端尚未初始化 Conda，先执行（路径按新服务器调整）：
-
-```bash
-source /data/wangsq/software/miniconda/etc/profile.d/conda.sh
-```
+从 clone 后的项目根目录执行，Conda 路径按新机器调整：
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(pwd)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
+source "$GDB_CONDA_ROOT/etc/profile.d/conda.sh"
 export GDB_METHOD_ROOT="$GDB_ROOT/third_party/methods"
-export GDB_MODEL_ROOT="$GDB_ROOT/models"
-export PIP_CACHE_DIR=/data/wangsq/.cache/pip
+export GDB_DATA_ROOT="${GDB_DATA_ROOT:-$GDB_ROOT/data}"
+export GDB_MODEL_ROOT="${GDB_MODEL_ROOT:-$GDB_ROOT/models}"
+export PIP_CACHE_DIR="$HOME/.cache/pip"
 
 command -v conda
 conda --version
@@ -124,7 +124,7 @@ Marker/Surya、PaddleX 和 MinerU 的模型缓存与本地配置见 [MODELS.md](
 只有编译 CUDA 扩展时才设置：
 
 ```bash
-export CUDA_HOME=/data/wangsq/software/cuda-envs/cuda-12.8
+export CUDA_HOME="$HOME/software/cuda-envs/cuda-12.8"  # 改成实际工具链路径
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 ```

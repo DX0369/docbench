@@ -31,8 +31,9 @@ Torch 2.9.1、Transformers 5.3.0、FlashInfer 0.6.7.post3 是上述官方 wheel
 镜像由环境总览中的公共设置统一配置。
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
-export SGLANG_ENV=/data/wangsq/software/miniconda/envs/gdb_unlimited_ocr_sglang
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
+export SGLANG_ENV="$GDB_CONDA_ROOT/envs/gdb_unlimited_ocr_sglang"
 export SGLANG_PY="$SGLANG_ENV/bin/python"
 export SGLANG_UV="$SGLANG_ENV/bin/uv"
 

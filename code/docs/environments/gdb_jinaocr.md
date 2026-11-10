@@ -24,8 +24,9 @@ vLLM 实际加载路径的检查。修复无需修改模型文件、官方插件
 及兼容版本；以下用于新建环境，不要覆盖已有环境：
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
-export CONDA_ROOT=/data/wangsq/software/miniconda
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
+export CONDA_ROOT="$GDB_CONDA_ROOT"
 export JINA_PY="$CONDA_ROOT/envs/gdb_jinaocr/bin/python"
 
 "$CONDA_ROOT/bin/conda" create -n gdb_jinaocr python=3.12 pip -y

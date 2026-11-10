@@ -18,7 +18,7 @@
 ## 安装与迁移
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
 export GDB_METHOD_ROOT="$GDB_ROOT/third_party/methods"
 unset PYTHONPATH PYTHONHOME
 export PYTHONNOUSERSITE=1

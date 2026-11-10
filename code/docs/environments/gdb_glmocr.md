@@ -44,7 +44,7 @@ LOCK_DIR="$GDB_ROOT/env/locks_rtx3090_20260720"
 
 conda create -n gdb_glmocr --file "$LOCK_DIR/gdb_glmocr.explicit.txt" -y
 conda env config vars set -n gdb_glmocr PYTHONNOUSERSITE=1
-GLM_PY="$(dirname "$(command -v conda)")/../envs/gdb_glmocr/bin/python"
+GLM_PY="$GDB_CONDA_ROOT/envs/gdb_glmocr/bin/python"
 
 # 精确恢复已审计的依赖集合，不重新解析宽下界。
 "$GLM_PY" -m pip install \

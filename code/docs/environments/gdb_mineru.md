@@ -84,12 +84,11 @@ MinerU + Popo 新组合 adapter 禁用 user site 后暴露了现有环境的隐�
 
 ```bash
 env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 \
-  "$(dirname "$(command -v conda)")/../envs/gdb_mineru/bin/python" -m pip install \
+  "$GDB_CONDA_ROOT/envs/gdb_mineru/bin/python" -m pip install \
   --no-deps 'psutil==7.2.2' 'nvidia-ml-py==13.595.45'
 
-PYTHONNOUSERSITE=1 "$(dirname "$(command -v conda)")/../envs/gdb_mineru/bin/python" -m pip check
+PYTHONNOUSERSITE=1 "$GDB_CONDA_ROOT/envs/gdb_mineru/bin/python" -m pip check
 ```
 
-环境路径由当前 `conda` 安装位置决定；当前为
-`/data/wangsq/software/miniconda`。这里 `--no-deps` 仅用于补入已确认版本的两个小包，
+环境路径由通用设置中的 `GDB_CONDA_ROOT` 决定。这里 `--no-deps` 仅用于补入已确认版本的两个小包，
 不适用于忽略其他环境冲突。

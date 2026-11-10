@@ -30,7 +30,8 @@ conda create -n gdb_teleocr python=3.10 -y
 conda activate gdb_teleocr
 
 export PYTHONNOUSERSITE=1
-export TELEOCR_ROOT=/data/wangsq/code/global_doc_bench/third_party/methods/TeleOCR
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export TELEOCR_ROOT="$GDB_ROOT/third_party/methods/TeleOCR"
 export PY="$CONDA_PREFIX/bin/python"
 
 grep -Ev '^(gradio|gradio-client|gradio-pdf|fastapi-cloud-cli)(==|$)' \

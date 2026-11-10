@@ -44,6 +44,7 @@ PYTHONNOUSERSITE=1 conda run -n gdb_hunyuan python -m pip install \
 ```bash
 PYTHONNOUSERSITE=1 \
     conda run -n gdb_hunyuan python -m pip --isolated install \
+    --index-url https://repo.huaweicloud.com/repository/pypi/simple \
     --no-deps psutil==7.2.2 nvidia-ml-py==13.595.45
 
 PYTHONNOUSERSITE=1 conda run -n gdb_hunyuan python -m pip check

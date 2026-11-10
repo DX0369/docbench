@@ -17,42 +17,27 @@
 当前入口要求前三项及 `failure_propagation.patch`。`resident_init.patch`保留用于解释
 本机已应用的历史TF初始化改动；新API客户端不调用它，不要求新机器安装TF常驻路径。
 
-## 应用与检查
+## 已保存补丁的检查
 
 从项目根目录执行，`GDB_ROOT` 指向该目录：
 
 ```bash
-export GDB_ROOT="$(pwd)"
-REPO="$GDB_ROOT/third_party/methods/MinerU-Popo"
+export GDB_ROOT="${GDB_ROOT:-$(pwd)}"
 PATCHES="$GDB_ROOT/code/src/methods/mineru_popo/patches"
-git -C "$REPO" apply --check "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
-git -C "$REPO" apply "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
+git -C "$GDB_ROOT" apply --directory=third_party/methods/MinerU-Popo --reverse --check \
+  "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
 ```
 
-已安装环境不要重复应用。可用以下只读命令确认当前四项修复均存在；adapter也做相同检查：
+根仓库中的源码快照已包含这些修复，迁移时只做反向检查，不重复应用或撤销。
+快照没有独立 `.git`，在其子目录执行 `git apply` 可能跳过全部文件；必须从根仓库用
+`--directory` 指定快照。检查失败时停止，核查源码版本、补丁状态及本地修改，不强制套用。
+
+`resident_init.patch` 也已保存在快照中；当前 API 路线不要求历史 Transformers 初始化路径，
+只有核查该历史实现时才额外检查：
 
 ```bash
-git -C "$REPO" apply --reverse --check "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
-```
-
-只有明确需要撤销时，才执行：
-
-```bash
-git -C "$REPO" apply --reverse --check "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
-git -C "$REPO" apply --reverse "$PATCHES/same_page.patch" "$PATCHES/pr12.patch" "$PATCHES/pr15.patch" "$PATCHES/failure_propagation.patch"
-```
-
-检查失败应停止，区分源码版本变化、部分应用和其他本地修改，不强制套用。
-
-仅恢复Git `c533601`的历史Transformers常驻路径时，另需以下初始化补丁：
-
-```bash
-git -C "$REPO" apply --check "$PATCHES/resident_init.patch"
-git -C "$REPO" apply "$PATCHES/resident_init.patch"
-# 已应用时只检查，不重复应用：
-git -C "$REPO" apply --reverse --check "$PATCHES/resident_init.patch"
-# 只有明确需要撤销时：
-# git -C "$REPO" apply --reverse "$PATCHES/resident_init.patch"
+git -C "$GDB_ROOT" apply --directory=third_party/methods/MinerU-Popo --reverse --check \
+  "$PATCHES/resident_init.patch"
 ```
 
 当前 `stages.py` 将官方 `model_utils` 与 `inference` 两处生成绑定接到同一常驻API客户端，

@@ -26,7 +26,7 @@ PDF 页面渲染使用项目公共 Poppler 工具 `pdfinfo`/`pdftoppm`；worker 
 恢复后可执行以下最小检查，不启动模型或 GPU 服务：
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
 unset PYTHONPATH PYTHONHOME
 export PYTHONNOUSERSITE=1
 export PYTHONDONTWRITEBYTECODE=1

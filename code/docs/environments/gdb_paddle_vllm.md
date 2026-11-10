@@ -28,11 +28,16 @@ python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
   unset PYTHONPATH PYTHONHOME PIP_EXTRA_INDEX_URL PIP_TARGET PIP_PREFIX PIP_USER
   export PYTHONNOUSERSITE=1
   conda create -n gdb_paddle_vllm python=3.10 pip setuptools wheel -y
-  conda run -n gdb_paddle_vllm python -m pip --isolated install \
+  conda run -n gdb_paddle_vllm env \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PADDLEOCR=3.8.0.dev9+g211989f04 \
+    python -m pip --isolated install \
+    --index-url https://repo.huaweicloud.com/repository/pypi/simple \
     -e "$GDB_METHOD_ROOT/paddleocr[doc-parser]" 'paddlex==3.7.2' 'psutil==7.2.2'
   conda run -n gdb_paddle_vllm python -m pip --isolated install \
+    --index-url https://repo.huaweicloud.com/repository/pypi/simple \
     'vllm==0.10.2' 'transformers==4.57.6'
   conda run -n gdb_paddle_vllm python -m pip --isolated install \
+    --index-url https://repo.huaweicloud.com/repository/pypi/simple \
     'https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.3.14/flash_attn-2.8.2+cu128torch2.8-cp310-cp310-linux_x86_64.whl'
   conda run -n gdb_paddle_vllm paddleocr install_genai_server_deps vllm
   conda run -n gdb_paddle_vllm python -m pip --isolated check
@@ -43,6 +48,8 @@ python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
 
 PyPI的FlashAttention源码包可能因构建隔离看不到Torch而失败，应优先使用上述官方文档
 列出的匹配预编译wheel；GitHub wheel仍是直连，不因下载慢自动开代理。
+源码快照不含上游 `.git`；package-specific SCM 变量只为本次 editable 安装指定
+现有 PaddleOCR 版本，不影响其他包的版本推导。该无 `.git` 安装流程尚未在新建环境中验证。
 不能只导入成功就宣称服务/GPU已验证；
 新机器仍需两个模型版本的有界smoke。本轮没有执行安装或更新包。
 

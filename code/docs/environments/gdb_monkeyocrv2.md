@@ -24,7 +24,7 @@ Transformers `5.19.0`、FlashInfer `0.6.13`。
 ```bash
 conda create -n gdb_monkeyocrv2 python=3.11.17 -y
 conda activate gdb_monkeyocrv2
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
 export MOCR2_SRC="$GDB_ROOT/third_party/methods/monkeyocrv2"
 export PYTHONNOUSERSITE=1
 

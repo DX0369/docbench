@@ -30,7 +30,10 @@ python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
   conda run -n gdb_paddle python -m pip --isolated install \
     --index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ \
     'paddlepaddle-gpu==3.2.1'
-  conda run -n gdb_paddle python -m pip --isolated install \
+  conda run -n gdb_paddle env \
+    SETUPTOOLS_SCM_PRETEND_VERSION_FOR_PADDLEOCR=3.8.0.dev9+g211989f04 \
+    python -m pip --isolated install \
+    --index-url https://repo.huaweicloud.com/repository/pypi/simple \
     -e "$GDB_METHOD_ROOT/paddleocr[doc-parser]" 'paddlex==3.7.2' 'psutil==7.2.2'
   conda run -n gdb_paddle python -m pip --isolated check
   conda run -n gdb_paddle python -c \
@@ -39,6 +42,9 @@ python3 "$GDB_ROOT/code/src/method_repositories.py" --method paddleocr status
 ```
 
 Paddle专用index只用于Paddle GPU wheel，其余依赖使用显式镜像直连。
+源码快照没有上游 `.git`；上述 package-specific SCM 变量只为本次 editable 安装指定现有
+PaddleOCR 版本，避免误用根仓库 Git 历史，不修改源码或依赖版本。该无 `.git` 安装流程
+尚未在新建环境中验证。
 重建后须分别验证PP与外部vLLM支持的VL pipeline；本轮仅整理配方，未重新安装。
 
 迁移时按本配方重建，再用根目录 `env/locks_rtx3090_20260720/gdb_paddle.*` 核对版本。

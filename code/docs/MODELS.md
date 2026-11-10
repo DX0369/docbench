@@ -3,7 +3,7 @@
 本文档只记录模型下载、缓存和本地路径检查。模型统一保存到：
 
 ```text
-/data/wangsq/code/global_doc_bench/models
+$GDB_ROOT/models
 ```
 
 代码默认直接从项目顶层 `models/` 读取权重，也可通过 `GDB_MODEL_ROOT` 覆盖。模型按明确的仓库名称和本地目录管理，目前不额外锁定模型仓库 commit。
@@ -24,7 +24,9 @@ Paddle inference 与 safetensors 格式分别保留，不能混用。`mineru/` �
 加载 Conda，并在下载终端清除代理（不修改全局配置）：
 
 ```bash
-source /data/wangsq/software/miniconda/etc/profile.d/conda.sh
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"  # 按实际安装位置调整
+source "$GDB_CONDA_ROOT/etc/profile.d/conda.sh"
 unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 export HF_ENDPOINT=https://hf-mirror.com
 ```
@@ -47,10 +49,9 @@ python -m pip install \
 设置模型和下载缓存目录：
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
-export GDB_MODEL_ROOT="$GDB_ROOT/models"
-export MODELSCOPE_CACHE=/data/wangsq/cache/modelscope
-export HF_HOME=/data/wangsq/cache/huggingface
+export GDB_MODEL_ROOT="${GDB_MODEL_ROOT:-$GDB_ROOT/models}"
+export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$HOME/.cache/modelscope}"
+export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"
 
 mkdir -p "$GDB_MODEL_ROOT"
@@ -238,7 +239,7 @@ hf download \
 GLM smoke 时传入：
 
 ```text
---glm-layout-model-dir /data/wangsq/code/global_doc_bench/models/PP-DocLayoutV3_safetensors
+--glm-layout-model-dir "$GDB_MODEL_ROOT/PP-DocLayoutV3_safetensors"
 ```
 
 
@@ -306,6 +307,17 @@ modelscope download \
 也可使用官方 `mineru-models-download --source modelscope --model_type all` 管理下载，
 但不要同时维护重复权重；不同版本环境仍需选择正确的 checkpoint。
 
+### MinerU-Popo
+
+组合方法复用上面的 MinerU 3.4.x 模型，另需官方 Popo 权重：
+
+```bash
+hf download DreamEternal/MinerU-Popo \
+  --local-dir "$GDB_MODEL_ROOT/mineru/MinerU-Popo"
+```
+
+客户端及服务环境见 [gdb_mineru_popo](environments/gdb_mineru_popo.md)。
+
 ### MinerU 4.0.11 Standard
 
 `mineru_4011_standard` 使用新版小模型包和原 2605 VLM；在独立
@@ -348,8 +360,10 @@ conda activate gdb_youtu
 du -sh "$GDB_MODEL_ROOT/Youtu-Parsing"
 
 HF_HUB_OFFLINE=1 python -c '
+import os
+from pathlib import Path
 from transformers import AutoConfig, AutoProcessor
-path = "/data/wangsq/code/global_doc_bench/models/Youtu-Parsing"
+path = Path(os.environ["GDB_MODEL_ROOT"]) / "Youtu-Parsing"
 print(AutoConfig.from_pretrained(path, trust_remote_code=True).__class__.__name__)
 print(AutoProcessor.from_pretrained(path, trust_remote_code=True).__class__.__name__)
 '
@@ -370,7 +384,7 @@ print(AutoProcessor.from_pretrained(path, trust_remote_code=True).__class__.__na
 本项目显式将其保存到：
 
 ```text
-/data/wangsq/code/global_doc_bench/models/marker-surya
+$GDB_MODEL_ROOT/marker-surya
 ```
 
 使用内部下载器只下载文件、不初始化 GPU 模型：
@@ -378,7 +392,7 @@ print(AutoProcessor.from_pretrained(path, trust_remote_code=True).__class__.__na
 ```bash
 conda activate gdb_marker
 
-export MODEL_CACHE_DIR=/data/wangsq/code/global_doc_bench/models/marker-surya
+export MODEL_CACHE_DIR="$GDB_MODEL_ROOT/marker-surya"
 mkdir -p "$MODEL_CACHE_DIR"
 
 python - <<'PY'
@@ -416,8 +430,9 @@ Surya 的调试渲染功能还可能按需下载字体，但 Marker 的 Markdown
 python - <<'PY'
 from pathlib import Path
 import json
+import os
 
-root = Path("/data/wangsq/code/global_doc_bench/models/marker-surya")
+root = Path(os.environ["MODEL_CACHE_DIR"])
 for manifest in sorted(root.rglob("manifest.json")):
     payload = json.loads(manifest.read_text())
     missing = [name for name in payload["files"] if not (manifest.parent / name).exists()]
@@ -435,7 +450,7 @@ PaddleX 当前没有稳定的“只下载不初始化”CLI。使用 CPU 初始�
 ```bash
 conda activate gdb_paddle
 
-export PADDLE_PDX_CACHE_HOME=/data/wangsq/code/global_doc_bench/models/paddlex
+export PADDLE_PDX_CACHE_HOME="$GDB_MODEL_ROOT/paddlex"
 export PADDLE_PDX_MODEL_SOURCE=modelscope
 export PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
 
@@ -490,7 +505,7 @@ find "$PADDLE_PDX_CACHE_HOME" -type f | wc -l
 benchmark 默认从项目顶层 `models/` 读取模型，不再需要创建 `code/external/models` 符号链接。验证默认解析结果：
 
 ```bash
-cd /data/wangsq/code/global_doc_bench/code
+cd "$GDB_ROOT/code"
 PYTHONPATH=src python -c 'from paths import MODEL_ROOT; print(MODEL_ROOT)'
 ```
 

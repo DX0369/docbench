@@ -27,10 +27,11 @@
 ## 安装命令
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
 export MINERU_303_SRC="$GDB_ROOT/third_party/methods/mineru_303"
-export MINERU_303_PY=/data/wangsq/software/miniconda/envs/gdb_mineru_303/bin/python
-export MINERU_303_UV=/data/wangsq/software/miniconda/envs/gdb_mineru_303/bin/uv
+export MINERU_303_PY="$GDB_CONDA_ROOT/envs/gdb_mineru_303/bin/python"
+export MINERU_303_UV="$GDB_CONDA_ROOT/envs/gdb_mineru_303/bin/uv"
 
 conda create -n gdb_mineru_303 python=3.10 pip setuptools wheel uv -y
 
@@ -82,20 +83,17 @@ git -C "$GDB_ROOT" apply --directory=third_party/methods/mineru_303 --reverse --
 ```
 
 如需恢复未补丁源码，用同样的 `--directory` 执行 `git apply --reverse`，不要删除记录或覆盖其他修改。
-实际环境包和三份锁未变，安装命令中的pypdfium2精确版本来自现有锁；HEAD不编码本地补丁。
-只恢复环境锁和HEAD、不应用补丁，仍会复现原错误。
+实际环境包和三份锁未变，安装命令中的 pypdfium2 精确版本来自现有锁；
+上游原始 revision 不含本地补丁，根仓库中的快照则已包含修复。
 
-补丁可从锁定 HEAD 精确重放；CPU 回归命令如下：
-
-```bash
 测试源已在定版前验证后删除；迁移时按 [运行命令](../RUN_COMMANDS.md) 执行源码、
 模型和环境审计，再运行 MinerU 的固定 P smoke。
-```
 
 GPU 运行命令见 [RUN_COMMANDS.md](../RUN_COMMANDS.md)。
 
 迁移时按本页配方重建，再用根目录 `env/locks_rtx3090_20260720/gdb_mineru_303.*`
-核对版本；源码仍须 checkout 到 `ff2caf3a842a54b3d31979a2945003cf67858199`。
+核对版本；源码快照对应的上游 revision 为 `ff2caf3a842a54b3d31979a2945003cf67858199`，
+用 `method_repositories.py --method mineru_303 status` 核对，不在快照内 checkout。
 
 ## 验收
 

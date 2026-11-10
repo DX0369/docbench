@@ -98,8 +98,8 @@ schema v2按方法/路线保存P和相关参数；旧schema、缺字段或跨路
 真实 smoke 应显式指定项目 `tmp/smoke/<run_id>/` 下的输出和日志，
 不要混入正式结果。dry-run 只能核对命令连线，不能代替真实 smoke 或性能结论。
 
-迁移前只保留以下无模型核对命令；历史 `test_*.py` 回归已在定版前执行，
-测试源不属于迁移运行时：
+以下是迁移后的无模型推理核对命令。仓库另保留少量核心回归测试，
+正式运行不会自动执行这些测试：
 
 ```bash
 python src/validation/check_method_versions.py \
@@ -124,5 +124,5 @@ python -m compileall -q src
 - [环境配方](../docs/environments/README.md)
 - [项目状态（工作区文档）](../../PROJECT_STATE.md)
 
-旧论文分析、旧多方法队列协议及一次性输出清理工具已移到项目
-`archive/code/src_pre_consolidation_6f608b9/`；对应旧提交不在当前仓库历史中。旧入口不保留兼容 wrapper；使用这里的新路径。
+旧论文分析、旧多方法队列协议及一次性输出清理工具不随本仓库迁移；当前运行不依赖历史归档，
+旧入口不保留兼容 wrapper，使用这里的新路径。

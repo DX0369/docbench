@@ -36,7 +36,7 @@ type unsetproxy >/dev/null 2>&1 && unsetproxy
 unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
 unset PYTHONPATH PYTHONHOME PIP_EXTRA_INDEX_URL PIP_PROXY
 export PYTHONNOUSERSITE=1
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
 export TMPDIR="$GDB_ROOT/tmp"
 mkdir -p "$TMPDIR/mineru4_install"
 

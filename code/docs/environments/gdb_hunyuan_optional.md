@@ -42,8 +42,9 @@ Transformers 5.5.3 不兼容。临时换用 Transformers 5.13 虽能完成架构
 以下命令会删除现有 `gdb_hunyuan_dflash`。执行前确认该环境没有正在运行的服务：
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
-export CONDA_ROOT=/data/wangsq/software/miniconda
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
+export CONDA_ROOT="$GDB_CONDA_ROOT"
 export CONDA="$CONDA_ROOT/bin/conda"
 export DFLASH_ENV="$CONDA_ROOT/envs/gdb_hunyuan_dflash"
 export DFLASH_PY="$DFLASH_ENV/bin/python"

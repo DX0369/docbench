@@ -12,14 +12,17 @@
 会按 `config/methods.json` 和 `execution/tasks.py` 选择自己的 Conda 环境。
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"  # 按实际安装位置调整
+export GDB_DATA_ROOT="${GDB_DATA_ROOT:-$GDB_ROOT/data}"
+export GDB_MODEL_ROOT="${GDB_MODEL_ROOT:-$GDB_ROOT/models}"
 export CODE="$GDB_ROOT/code"
-export PDF_ROOT="$GDB_ROOT/data/pdf_tree"
+export PDF_ROOT="$GDB_DATA_ROOT/pdf_tree"
 export INPUTS="$CODE/config/throughput_manifests/rtx3090_20.json"
 export GPU=6                         # 运行前由用户确认空闲
 export RUN_ID="benchmark_$(date +%Y%m%d_%H%M%S)"
 export RUN_ROOT="$GDB_ROOT/experiments/benchmark/$RUN_ID"
-export PY=/data/wangsq/software/miniconda/bin/python
+export PY="$GDB_CONDA_ROOT/bin/python"
 
 mkdir -p "$RUN_ROOT/outputs" "$RUN_ROOT/logs"
 cd "$CODE"
@@ -98,13 +101,13 @@ Qianfan 固定使用单页 page pool；Unlimited 的 page pool 路线仍需显�
 run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
 ```
 
-如果已经保存选定 profile，固定运行改用：
+如果已为当前机器保存选定 profile，固定运行改用：
 
 ```bash
 "$PY" src/benchmark/run_single_gpu.py \
     --method <METHOD_ID> \
     --gpu-id "$GPU" \
-    --profile-file "$CODE/config/throughput_profiles/rtx3090.json" \
+    --profile-file "$CODE/config/throughput_profiles/my_selected.json" \
     --execution-profile <EXACT_PROFILE_ID> \
     --pdf-list-file "$INPUTS" \
     --run-name "${RUN_ID}_<METHOD_ID>" \
@@ -112,10 +115,30 @@ run_fixed unlimited_ocr_sglang 4 --unlimited-ocr-request-mode page_pool
     --log-root "$RUN_ROOT/logs/<METHOD_ID>"
 ```
 
+### 迁移时的路径与历史 profile
+
+`GDB_CONDA_ROOT`、`GDB_DATA_ROOT` 和 `GDB_MODEL_ROOT` 已由代码支持；更换根目录不需要修改源码。
+上面的 `GDB_ROOT` 供 shell 命令展开，第三方源码仍随项目目录保留。
+
+需要 CUDA 编译工具链的路线，在实际命令中显式传入新机器的路径，例如：
+
+```bash
+CUDA_TOOLKIT="$HOME/software/cuda-envs/cuda-12.8"  # 改成实际路径
+run_fixed jina_ocr_v1 1 --jina-cuda-home "$CUDA_TOOLKIT"
+run_fixed hunyuanocr_15_dflash 1 --hunyuan-dflash-cuda-home "$CUDA_TOOLKIT"
+run_fixed unlimited_ocr_sglang 1 --unlimited-ocr-cuda-home "$CUDA_TOOLKIT"
+```
+
+`config/throughput_profiles/rtx3090.json` 中的 Marker/Unlimited P4 仅为历史配置，
+缺少可追溯的调参产物，不视为已确认最优。Unlimited 条目仍记录旧机器的 CUDA 和缓存绝对路径；
+这些路径不会随 `GDB_ROOT` 自动替换，JSON 也不会展开 shell 变量。
+若明确要复用，应在自己的 profile 中填写新路径；不要覆盖历史记录。
+使用 `--profile-file` 时不能同时用运行参数覆盖 profile；需要手动指定参数时，直接使用固定 P 命令。
+
 ### 完整 PDF 目录的正式固定 P 运行
 
 下面的入口不传 `--pdf-list-file`，会递归处理 `$PDF_ROOT` 下的全部 PDF。它适用于
-已经选定 P 后的正式运行；当前数据目录预计包含 163 份 PDF。
+已经选定 P 后的正式运行；实际输入范围由目录内容决定，不假定固定文档数量。
 
 ```bash
 "$PY" src/benchmark/run_single_gpu.py \
@@ -385,12 +408,12 @@ Popo 仍保留独立 native 组合入口，不能使用上述 `run_fixed`：
 "$PY" src/benchmark/run_native_batch.py \
     --methods mineru_344_2605_popo \
     --gpus "$GPU" \
-    --popo-vllm-python /data/wangsq/software/miniconda/envs/gdb_mineru/bin/python \
+    --popo-vllm-python "$GDB_CONDA_ROOT/envs/gdb_mineru/bin/python" \
     --popo-gpu-memory-utilization 0.68 \
     --mineru-vllm-gpu-memory-utilization 0.20 \
     --popo-max-model-len 32768 \
     --run-id "${RUN_ID}_popo" \
-    --input-root "$GDB_ROOT/data/pdf_tree" \
+    --input-root "$PDF_ROOT" \
     --output-root-base "$GDB_ROOT/tmp/smoke/${RUN_ID}_popo/outputs" \
     --log-root "$GDB_ROOT/tmp/smoke/${RUN_ID}_popo/logs"
 ```

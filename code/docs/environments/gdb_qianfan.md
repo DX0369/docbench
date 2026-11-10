@@ -24,8 +24,9 @@ Conda explicit恢复Conda部分（含pip/setuptools/wheel），pip快照恢复�
 explicit中的Conda下载URL与下方PyPI镜像是不同来源。
 
 ```bash
-export GDB_ROOT=/data/wangsq/code/global_doc_bench
-export QIANFAN_PREFIX=/data/wangsq/software/miniconda/envs/gdb_qianfan
+export GDB_ROOT="${GDB_ROOT:-$(git rev-parse --show-toplevel)}"
+export GDB_CONDA_ROOT="${GDB_CONDA_ROOT:-$HOME/software/miniconda}"
+export QIANFAN_PREFIX="$GDB_CONDA_ROOT/envs/gdb_qianfan"
 export QIANFAN_PY="$QIANFAN_PREFIX/bin/python"
 export LOCK_DIR="$GDB_ROOT/env/locks_rtx3090_20260720"
 mkdir -p "$GDB_ROOT/tmp"
@@ -34,13 +35,15 @@ export PYTHONNOUSERSITE=1 TMPDIR="$GDB_ROOT/tmp"
 conda create --prefix "$QIANFAN_PREFIX" \
   --file "$LOCK_DIR/gdb_qianfan.explicit.txt" -y
 "$QIANFAN_PY" -m pip --isolated install \
+  --index-url https://repo.huaweicloud.com/repository/pypi/simple \
   -r "$LOCK_DIR/gdb_qianfan.pip-freeze.txt"
 env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 "$QIANFAN_PY" -m pip check
 env -u PYTHONPATH -u PYTHONHOME PYTHONNOUSERSITE=1 "$QIANFAN_PY" -c \
   'import site, torch, transformers, vllm, psutil, pynvml; print(site.ENABLE_USER_SITE, torch.__version__, torch.version.cuda, transformers.__version__, vllm.__version__); print(psutil.__file__, pynvml.__file__)'
 ```
 
-完整 YAML 和 pip 快照仅用于迁移核对；补入的 `psutil==7.2.2`、`nvidia-ml-py==13.595.45`
+完整 YAML 仅用于参考；本节同平台恢复使用的 pip 清单不含本机 editable 或临时 wheel 路径，
+其他环境锁不能据此直接重放。补入的 `psutil==7.2.2`、`nvidia-ml-py==13.595.45`
 已包含在根目录锁文件中。真实服务和压力参数见 [RUN_COMMANDS.md](../RUN_COMMANDS.md) 与吞吐协议。
 
 ## eager / auto 执行模式
